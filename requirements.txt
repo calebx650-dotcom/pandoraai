@@ -1,0 +1,20 @@
+
+# AI & NLP
+nlpcloud
+spacy
+
+# Database
+neo4j
+
+# Web Scraping
+ddgs
+requests
+beautifulsoup4
+
+# UI
+streamlit
+pyvis
+
+# Utilities
+python-dotenv
+pydantic<2
