@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+  <!-- IGH-style shield: rounded U with a notch at the bottom-right -->
+  <path d="M14 8 H50 V40 C50 50 42 58 32 58 C22 58 14 50 14 40 Z"
+        fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Orange accent at bottom-right of shield -->
+  <path d="M50 30 V40 C50 47 45.5 53 40 56 L40 56 C46 53 50 47 50 40 Z"
+        fill="#E84E2C"/>
+  <!-- IGH wordmark -->
+  <text x="32" y="34" text-anchor="middle"
+        font-family="Helvetica, Arial, sans-serif"
+        font-size="14" font-weight="800" fill="#FFFFFF"
+        letter-spacing="0.5">IGH</text>
+</svg>

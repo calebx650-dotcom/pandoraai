@@ -1,0 +1,23 @@
+<!doctype html>
+<html><body style="font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial; color: #1F1F23; max-width: 560px;">
+  <div style="background: #13334A; color: white; padding: 16px 20px; border-radius: 10px 10px 0 0;">
+    <div style="font-size: 11px; letter-spacing: 1.4px; color: #E84E2C; font-weight: 700;">IGH HEALTH FIRE SAFETY</div>
+    <div style="font-size: 18px; font-weight: 700; margin-top: 2px;">Inspection report</div>
+  </div>
+  <div style="border: 1px solid #E4E4EA; border-top: 0; padding: 18px 20px; border-radius: 0 0 10px 10px;">
+    <p>Hi {{ insp.contact_name or 'team' }},</p>
+    <p>Your <strong>{{ template.name }}</strong> inspection is complete for <strong>{{ insp.customer_name }} - {{ insp.site_name }}</strong>.</p>
+    <p>Inspector: {{ insp.inspector_name }}<br>
+       Completed: {{ insp.completed_at }}</p>
+    <p style="margin: 22px 0;">
+      <a href="{{ report_url }}"
+         style="background: #E84E2C; color: white; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;">
+        View full report
+      </a>
+    </p>
+    <p style="color: #6E6E79; font-size: 13px;">If the button doesn't work, open this link in your browser:<br>
+      <a href="{{ report_url }}" style="color: #E84E2C;">{{ report_url }}</a>
+    </p>
+    <p style="color: #6E6E79; font-size: 12px; margin-top: 28px;">- IGH Health, Fire &amp; Safety<br>ighsafety.com</p>
+  </div>
+</body></html>

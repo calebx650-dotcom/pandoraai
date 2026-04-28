@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Templates - Admin{% endblock %}
+{% block topbar_title %}Admin - Templates{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>Inspection templates</h2><p>Edit, add, or remove templates. JSON format.</p></div>
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<div class="card-title">Existing templates</div>
+<div class="card">
+  {% for slug, t in templates.items() %}
+  <div class="row">
+    <div class="meta">
+      <div class="title">{{ t.name }}</div>
+      <div class="sub">slug: <code>{{ slug }}</code> - {{ t.sections|length }} section(s)</div>
+    </div>
+    <form method="post" action="{{ url_for('admin_template_delete', slug=slug) }}"
+          onsubmit="return confirm('Remove {{ slug }}?');">
+      <button type="submit" class="btn ghost" style="padding: 8px 12px; min-height: 0;">Remove</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card-title">Add or update a template</div>
+<form method="post">
+  <div class="card" style="padding: 6px 0;">
+    <div class="field">
+      <label>Slug (lowercase, no spaces)</label>
+      <input type="text" name="slug" placeholder="my_custom_check" required>
+    </div>
+    <div class="field">
+      <label>Template JSON</label>
+      <textarea name="body" rows="14" style="font-family: monospace; font-size: 13px;"
+                placeholder='{
+  "name": "My Custom Check",
+  "icon": "MC",
+  "frequency_months": 12,
+  "sections": [
+    {
+      "title": "Section A",
+      "items": [
+        {"id": "a1", "label": "Some check", "type": "check"}
+      ]
+    }
+  ]
+}'></textarea>
+      <div class="hint">Item types: <code>check</code> (Pass/Fail/NA), <code>text</code>, <code>number</code>.</div>
+    </div>
+  </div>
+  <div style="padding: 16px;">
+    <button type="submit" class="btn full">Save template</button>
+  </div>
+</form>
+{% endblock %}

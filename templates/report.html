@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Report - {{ template.name }} - IGH fireNspec{% endblock %}
+{% block topbar_title %}Inspection Report{% endblock %}
+{% block content %}
+
+<div class="pagehead">
+  <h2>{{ template.icon }} {{ template.name }}</h2>
+  <p><strong>{{ insp.customer_name }} - {{ insp.site_name }}</strong></p>
+  <p>{{ insp.address or '' }}</p>
+  <p style="margin-top:6px;">
+    Completed {{ insp.completed_at|fmtdate }} by {{ insp.inspector_name }}
+    {% if insp.gps_lat %}<br>GPS {{ '%.4f'|format(insp.gps_lat) }}, {{ '%.4f'|format(insp.gps_lng) }}{% endif %}
+  </p>
+</div>
+
+{% if not template.is_firewatch %}
+<div class="stats">
+  <div class="stat pass"><div class="num">{{ counts.pass }}</div><div class="lbl">Pass</div></div>
+  <div class="stat fail"><div class="num">{{ counts.fail }}</div><div class="lbl">Fail</div></div>
+  <div class="stat na"><div class="num">{{ counts.na }}</div><div class="lbl">N/A</div></div>
+  <div class="stat"><div class="num">{{ counts.unanswered }}</div><div class="lbl">Skipped</div></div>
+</div>
+{% endif %}
+
+{% if rounds %}
+<div class="section">
+  <h3>Patrol Rounds ({{ rounds|length }})</h3>
+  {% for r in rounds %}
+  <div class="item">
+    <div class="row-flex" style="justify-content: space-between;">
+      <strong>Round #{{ r.round_no }}</strong>
+      <span style="color: var(--ink-3); font-size: 12px;">{{ r.started_at|fmtdate }}</span>
+    </div>
+    <div style="margin-top: 4px;"><strong>{{ r.location }}</strong></div>
+    <div style="margin-top: 2px; color: var(--ink-2);">{{ r.observations or '(no observations)' }}</div>
+    <div style="margin-top: 6px;">
+      {% if r.all_clear %}<span class="pill pass">All clear</span>
+      {% else %}<span class="pill fail">Issue noted</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for section in template.sections %}
+<div class="section">
+  <h3>{{ section.title }}</h3>
+  {% for item in section['items'] %}
+    {% set ans = answers.get(item.id, {}) %}
+    <div class="item">
+      <div class="row-flex" style="justify-content: space-between;">
+        <div class="lbl" style="margin: 0; flex: 1;">{{ item.label }}</div>
+        {% if item.type == 'check' %}
+          {% if ans.get('result') == 'pass' %}<span class="pill pass">Pass</span>
+          {% elif ans.get('result') == 'fail' %}<span class="pill fail">Fail</span>
+          {% elif ans.get('result') == 'na' %}<span class="pill na">N/A</span>
+          {% else %}<span class="pill na">-</span>{% endif %}
+        {% else %}
+          <span style="color: var(--ink-2); font-weight: 600;">{{ ans.get('result') or '-' }}</span>
+        {% endif %}
+      </div>
+      {% if ans.get('note') %}<div class="sub" style="margin-top: 6px; color: var(--ink-2); font-size: 13px;">Note: {{ ans.get('note') }}</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% if photos %}
+<div class="section">
+  <h3>Photos ({{ photos|length }})</h3>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; padding: 16px;">
+    {% for p in photos %}
+    <a href="{{ url_for('uploaded_file', inspection_id=insp.id, filename=p.filename) }}" target="_blank">
+      <img src="{{ url_for('uploaded_file', inspection_id=insp.id, filename=p.filename) }}"
+           style="width: 100%; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+      {% if p.caption %}<div style="font-size: 11px; color: var(--ink-3); margin-top: 2px;">{{ p.caption }}</div>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if insp.notes %}
+<div class="section">
+  <h3>Inspector Notes</h3>
+  <div class="item" style="white-space: pre-wrap;">{{ insp.notes }}</div>
+</div>
+{% endif %}
+
+<div class="section">
+  <h3>Sign-off</h3>
+  <div class="signature-block">
+    <div class="sig">
+      <strong>Inspector</strong>
+      {% if insp.inspector_signature and insp.inspector_signature.startswith('data:image') %}
+        <img src="{{ insp.inspector_signature }}" alt="Inspector signature"
+             style="max-width: 100%; height: 60px; object-fit: contain;">
+      {% else %}
+        {{ insp.inspector_signature or insp.inspector_name }}
+      {% endif %}
+    </div>
+    <div class="sig">
+      <strong>Customer</strong>
+      {% if insp.customer_signature and insp.customer_signature.startswith('data:image') %}
+        <img src="{{ insp.customer_signature }}" alt="Customer signature"
+             style="max-width: 100%; height: 60px; object-fit: contain;">
+      {% else %}
+        {{ insp.customer_signature or '-' }}
+      {% endif %}
+    </div>
+  </div>
+  {% if insp.customer_email %}
+  <div class="item" style="font-size: 13px; color: var(--ink-2);">
+    Report copy: {{ insp.customer_email }}
+  </div>
+  {% endif %}
+</div>
+
+<div class="no-print" style="padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+  <button onclick="window.print()" class="btn">Print / Save PDF</button>
+  <form method="post" action="{{ url_for('email_report', inspection_id=insp.id) }}" style="display: contents;">
+    <button type="submit" class="btn secondary">Email this report</button>
+  </form>
+  <a href="{{ url_for('dashboard') }}" class="btn ghost" style="grid-column: span 2;">Back to home</a>
+</div>
+
+<div class="no-print" style="text-align: center; color: var(--ink-3); font-size: 11px; padding: 0 16px 24px;">
+  Report ID #{{ insp.id }} - IGH Health, Fire &amp; Safety - ighsafety.com
+</div>
+{% endblock %}

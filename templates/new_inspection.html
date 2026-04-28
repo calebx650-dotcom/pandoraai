@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}New inspection · IGH fireNspec{% endblock %}
+{% block topbar_title %}New Inspection{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>Start an inspection</h2><p>Pick the site and template to begin.</p></div>
+
+<form method="post">
+  <div class="card" style="padding: 6px 0;">
+    <div class="field">
+      <label>Site</label>
+      <select name="site_id" required>
+        <option value="" disabled {% if not request.args.get('site_id') %}selected{% endif %}>Choose a site…</option>
+        {% for s in sites %}
+        <option value="{{ s.id }}" {% if request.args.get('site_id')|int == s.id %}selected{% endif %}>
+          {{ s.customer_name }} — {{ s.site_name }}
+        </option>
+        {% endfor %}
+      </select>
+      <div class="hint">Don't see it? <a href="{{ url_for('new_site') }}">Add a new site</a>.</div>
+    </div>
+
+    <div class="field">
+      <label>Template</label>
+      <select name="template_slug" required>
+        {% for slug, t in TEMPLATES.items() %}
+        <option value="{{ slug }}">{{ t.icon }} {{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>GPS (optional but recommended)</label>
+      <button type="button" id="gps-btn" class="btn ghost full">📍 Tap to capture location</button>
+      <input type="hidden" id="gps_lat" name="gps_lat">
+      <input type="hidden" id="gps_lng" name="gps_lng">
+      <div class="hint">Stored on the report for proof of presence on-site.</div>
+    </div>
+  </div>
+
+  <div style="padding: 16px;">
+    <button type="submit" class="btn full">Start inspection</button>
+  </div>
+</form>
+{% endblock %}

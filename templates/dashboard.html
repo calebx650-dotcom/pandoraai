@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Home · IGH fireNspec{% endblock %}
+{% block topbar_title %}Hello, {{ current_user.split(' ')[0] }}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h2>Today</h2>
+  <p>{{ now.strftime('%A, %b %d, %Y') }}</p>
+</div>
+
+{% if in_progress %}
+<div class="card-title">In progress</div>
+<div class="card">
+  {% for i in in_progress %}
+  <a class="row clickable" href="{{ url_for('inspection', inspection_id=i.id) }}">
+    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} — {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }} · started {{ i.started_at|fmtdate }}</div>
+    </div>
+    <span class="pill in_progress">In progress</span>
+    <span class="chev">›</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if overdue %}
+<div class="card-title">Overdue devices</div>
+<div class="card">
+  {% for d in overdue[:8] %}
+  <a class="row clickable" href="{{ url_for('site_detail', site_id=d.site_id) }}">
+    <div class="icon">⚠️</div>
+    <div class="meta">
+      <div class="title">{{ d.barcode or d.serial }} · {{ d.location or d.device_type }}</div>
+      <div class="sub">{{ d.customer_name }} — due {{ d.next_due|fmtdate }}</div>
+    </div>
+    <span class="pill overdue">Overdue</span>
+    <span class="chev">›</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if upcoming %}
+<div class="card-title">Due in next 30 days</div>
+<div class="card">
+  {% for d in upcoming[:8] %}
+  <a class="row clickable" href="{{ url_for('site_detail', site_id=d.site_id) }}">
+    <div class="icon">⏰</div>
+    <div class="meta">
+      <div class="title">{{ d.barcode or d.serial }} · {{ d.location or d.device_type }}</div>
+      <div class="sub">{{ d.customer_name }} — due {{ d.next_due|fmtdate }} ({{ d.next_due|days_until }}d)</div>
+    </div>
+    <span class="pill due-soon">Soon</span>
+    <span class="chev">›</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card-title">Recent reports</div>
+{% if recent %}
+<div class="card">
+  {% for i in recent %}
+  <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
+    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} — {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }} · {{ i.completed_at|fmtdate }}</div>
+    </div>
+    <span class="pill completed">Done</span>
+    <span class="chev">›</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty"><div class="big">📄</div>No completed reports yet.</div></div>
+{% endif %}
+
+<a href="{{ url_for('new_inspection') }}" class="fab" aria-label="New inspection">+</a>
+{% endblock %}

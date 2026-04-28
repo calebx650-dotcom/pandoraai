@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Activity log - Admin{% endblock %}
+{% block topbar_title %}Admin - Activity{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>Activity log</h2><p>Last 200 events.</p></div>
+
+{% if events %}
+<div class="card">
+  {% for e in events %}
+  <div class="row">
+    <div class="meta">
+      <div class="title">{{ e.action }}</div>
+      <div class="sub">
+        {{ e.user_name or 'system' }}
+        {% if e.target_type %} - {{ e.target_type }} #{{ e.target_id }}{% endif %}
+        {% if e.detail %} - {{ e.detail }}{% endif %}
+      </div>
+      <div class="sub" style="margin-top: 2px;">{{ e.created_at|relative }} ({{ e.created_at|fmtdate }})</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">No activity yet.</div></div>
+{% endif %}
+{% endblock %}

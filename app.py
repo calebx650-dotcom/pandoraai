@@ -1,0 +1,692 @@
+"""IGH fireNspec - Flask MVP.
+
+Run:
+    pip install -r requirements.txt
+    python app.py
+"""
+import os
+import re
+import json
+from datetime import datetime, timedelta
+from functools import wraps
+from urllib.parse import quote
+from werkzeug.utils import secure_filename
+
+from flask import (
+    Flask, render_template, request, redirect, url_for, session,
+    jsonify, flash, abort, send_from_directory,
+)
+from werkzeug.security import check_password_hash
+
+from db import get_conn, init_db, log_event
+from templates_data import TEMPLATES, get_template, all_items, save_overrides
+
+app = Flask(__name__)
+# In production set IGH_SECRET via `fly secrets set IGH_SECRET=...`
+app.secret_key = os.environ.get("IGH_SECRET")
+if not app.secret_key:
+    if os.environ.get("FLASK_ENV") == "production":
+        raise RuntimeError("IGH_SECRET must be set in production")
+    app.secret_key = "dev-igh-firenspec-secret"
+app.config["JSON_SORT_KEYS"] = False
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB photo cap
+# Uploads go on the persistent volume in production, fall back to repo dir for local dev
+UPLOAD_DIR = os.path.join(os.environ.get("DATA_DIR", os.path.dirname(__file__)), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+init_db()
+
+
+# ---------- helpers ----------
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login", next=request.path))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if session.get("user_role") != "admin":
+            abort(403)
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+@app.context_processor
+def inject_globals():
+    return {
+        "TEMPLATES": TEMPLATES,
+        "current_user": session.get("user_name"),
+        "current_role": session.get("user_role"),
+        "now": datetime.utcnow(),
+    }
+
+
+@app.template_filter("fmtdate")
+def fmtdate(value):
+    if not value:
+        return "-"
+    try:
+        if "T" in value:
+            return datetime.fromisoformat(value).strftime("%b %d, %Y %I:%M %p")
+        return datetime.fromisoformat(value).strftime("%b %d, %Y")
+    except Exception:
+        return value
+
+
+@app.template_filter("relative")
+def relative(value):
+    if not value:
+        return "-"
+    try:
+        d = datetime.fromisoformat(value)
+        delta = datetime.utcnow() - d
+        s = int(delta.total_seconds())
+        if s < 60:    return f"{s}s ago"
+        if s < 3600:  return f"{s // 60}m ago"
+        if s < 86400: return f"{s // 3600}h ago"
+        return f"{s // 86400}d ago"
+    except Exception:
+        return value
+
+
+@app.template_filter("days_until")
+def days_until(value):
+    if not value:
+        return None
+    try:
+        d = datetime.fromisoformat(value).date()
+        return (d - datetime.utcnow().date()).days
+    except Exception:
+        return None
+
+
+# ---------- auth ----------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        conn = get_conn()
+        user = conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        conn.close()
+        if user and check_password_hash(user["password_hash"], password):
+            session["user_id"] = user["id"]
+            session["user_name"] = user["full_name"]
+            session["user_role"] = user["role"]
+            log_event(user["id"], "login", "user", user["id"], f"{user['full_name']} signed in")
+            nxt = request.args.get("next") or url_for("dashboard")
+            return redirect(nxt)
+        flash("Invalid login. Try inspector / igh2026.", "error")
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    if session.get("user_id"):
+        log_event(session["user_id"], "logout")
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# ---------- dashboard ----------
+@app.route("/")
+@login_required
+def dashboard():
+    conn = get_conn()
+    in_progress = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name
+        FROM inspections i JOIN sites s ON s.id = i.site_id
+        WHERE i.status = 'in_progress' AND i.inspector_id = ?
+        ORDER BY i.started_at DESC
+    """, (session["user_id"],)).fetchall()
+    recent = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name
+        FROM inspections i JOIN sites s ON s.id = i.site_id
+        WHERE i.status = 'completed'
+        ORDER BY i.completed_at DESC LIMIT 10
+    """).fetchall()
+    today = datetime.utcnow().date().isoformat()
+    overdue = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name FROM devices d
+        JOIN sites s ON s.id = d.site_id
+        WHERE d.next_due IS NOT NULL AND d.next_due < ?
+        ORDER BY d.next_due ASC
+    """, (today,)).fetchall()
+    upcoming = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name FROM devices d
+        JOIN sites s ON s.id = d.site_id
+        WHERE d.next_due IS NOT NULL AND d.next_due >= ? AND d.next_due <= ?
+        ORDER BY d.next_due ASC
+    """, (today, (datetime.utcnow().date() + timedelta(days=30)).isoformat())).fetchall()
+    conn.close()
+    return render_template("dashboard.html",
+        in_progress=in_progress, recent=recent, overdue=overdue, upcoming=upcoming)
+
+
+# ---------- sites ----------
+@app.route("/sites")
+@login_required
+def sites():
+    q = request.args.get("q", "").strip()
+    conn = get_conn()
+    if q:
+        rows = conn.execute("""
+            SELECT s.*, COUNT(d.id) AS device_count FROM sites s
+            LEFT JOIN devices d ON d.site_id = s.id
+            WHERE s.customer_name LIKE ? OR s.site_name LIKE ? OR s.address LIKE ?
+            GROUP BY s.id ORDER BY s.customer_name
+        """, (f"%{q}%", f"%{q}%", f"%{q}%")).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT s.*, COUNT(d.id) AS device_count FROM sites s
+            LEFT JOIN devices d ON d.site_id = s.id
+            GROUP BY s.id ORDER BY s.customer_name
+        """).fetchall()
+    conn.close()
+    return render_template("sites.html", sites=rows, q=q)
+
+
+@app.route("/sites/new", methods=["GET", "POST"])
+@login_required
+def new_site():
+    if request.method == "POST":
+        f = request.form
+        conn = get_conn()
+        cur = conn.execute("""
+            INSERT INTO sites (customer_name, site_name, address, contact_name, contact_phone, notes, created_at)
+            VALUES (?,?,?,?,?,?,?)
+        """, (f.get("customer_name", "").strip(), f.get("site_name", "").strip(),
+              f.get("address", "").strip(), f.get("contact_name", "").strip(),
+              f.get("contact_phone", "").strip(), f.get("notes", "").strip(),
+              datetime.utcnow().isoformat(timespec="seconds")))
+        site_id = cur.lastrowid
+        conn.commit(); conn.close()
+        log_event(session["user_id"], "site_created", "site", site_id,
+                  f.get("customer_name", "").strip())
+        flash("Site created.", "success")
+        return redirect(url_for("site_detail", site_id=site_id))
+    return render_template("new_site.html")
+
+
+@app.route("/sites/<int:site_id>")
+@login_required
+def site_detail(site_id):
+    conn = get_conn()
+    site = conn.execute("SELECT * FROM sites WHERE id = ?", (site_id,)).fetchone()
+    if not site:
+        conn.close(); abort(404)
+    devices = conn.execute(
+        "SELECT * FROM devices WHERE site_id = ? ORDER BY device_type, location", (site_id,)
+    ).fetchall()
+    inspections = conn.execute("""
+        SELECT i.*, u.full_name AS inspector_name FROM inspections i
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.site_id = ? ORDER BY i.started_at DESC
+    """, (site_id,)).fetchall()
+    conn.close()
+    return render_template("site_detail.html", site=site, devices=devices, inspections=inspections)
+
+
+@app.route("/sites/<int:site_id>/devices/new", methods=["POST"])
+@login_required
+def new_device(site_id):
+    f = request.form
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO devices (site_id, device_type, barcode, model, serial, location)
+        VALUES (?,?,?,?,?,?)
+    """, (site_id, f.get("device_type"), f.get("barcode"), f.get("model"),
+          f.get("serial"), f.get("location")))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "device_added", "site", site_id, f.get("barcode") or f.get("device_type"))
+    flash("Device added.", "success")
+    return redirect(url_for("site_detail", site_id=site_id))
+
+
+# ---------- inspections ----------
+@app.route("/inspect/new", methods=["GET", "POST"])
+@login_required
+def new_inspection():
+    conn = get_conn()
+    sites_rows = conn.execute("SELECT * FROM sites ORDER BY customer_name").fetchall()
+    if request.method == "POST":
+        site_id = int(request.form["site_id"])
+        slug = request.form["template_slug"]
+        if slug not in TEMPLATES:
+            flash("Unknown template.", "error"); return redirect(url_for("new_inspection"))
+        gps_lat = request.form.get("gps_lat") or None
+        gps_lng = request.form.get("gps_lng") or None
+        device_id = request.form.get("device_id") or None
+        cur = conn.execute("""
+            INSERT INTO inspections (site_id, inspector_id, template_slug, status, started_at, gps_lat, gps_lng, device_id)
+            VALUES (?, ?, ?, 'in_progress', ?, ?, ?, ?)
+        """, (site_id, session["user_id"], slug,
+              datetime.utcnow().isoformat(timespec="seconds"),
+              float(gps_lat) if gps_lat else None,
+              float(gps_lng) if gps_lng else None,
+              int(device_id) if device_id else None))
+        iid = cur.lastrowid
+        conn.commit(); conn.close()
+        action = "firewatch_started" if slug == "firewatch" else "inspection_started"
+        log_event(session["user_id"], action, "inspection", iid, TEMPLATES[slug]["name"])
+        return redirect(url_for("inspection", inspection_id=iid))
+    conn.close()
+    return render_template("new_inspection.html", sites=sites_rows)
+
+
+@app.route("/inspections/<int:inspection_id>")
+@login_required
+def inspection(inspection_id):
+    conn = get_conn()
+    insp = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, s.address, u.full_name AS inspector_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.id = ?
+    """, (inspection_id,)).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    items = conn.execute(
+        "SELECT * FROM inspection_items WHERE inspection_id = ?", (inspection_id,)
+    ).fetchall()
+    rounds = conn.execute(
+        "SELECT * FROM firewatch_rounds WHERE inspection_id = ? ORDER BY round_no DESC",
+        (inspection_id,)
+    ).fetchall()
+    photos = conn.execute(
+        "SELECT * FROM inspection_photos WHERE inspection_id = ? ORDER BY uploaded_at DESC",
+        (inspection_id,)
+    ).fetchall()
+    comments = conn.execute("""
+        SELECT c.*, u.full_name AS user_name FROM inspection_comments c
+        JOIN users u ON u.id = c.user_id
+        WHERE c.inspection_id = ? ORDER BY c.created_at ASC
+    """, (inspection_id,)).fetchall()
+    conn.close()
+    answers = {row["item_id"]: dict(row) for row in items}
+    template = get_template(insp["template_slug"])
+    return render_template("inspection.html", insp=insp, template=template,
+                           answers=answers, rounds=rounds, photos=photos, comments=comments)
+
+
+@app.route("/inspections/<int:inspection_id>/save", methods=["POST"])
+@login_required
+def save_item(inspection_id):
+    """Auto-save endpoint - POSTed on every change."""
+    j = request.get_json(silent=True) or {}
+    item_id = request.form.get("item_id") or j.get("item_id")
+    result = request.form.get("result") if "result" in request.form else j.get("result")
+    note   = request.form.get("note")   if "note"   in request.form else j.get("note")
+    if not item_id:
+        return jsonify({"ok": False, "error": "missing item_id"}), 400
+    conn = get_conn()
+    existing = conn.execute(
+        "SELECT id FROM inspection_items WHERE inspection_id = ? AND item_id = ?",
+        (inspection_id, item_id),
+    ).fetchone()
+    if existing:
+        if result is not None and note is not None:
+            conn.execute("UPDATE inspection_items SET result=?, note=? WHERE id=?",
+                         (result, note, existing["id"]))
+        elif result is not None:
+            conn.execute("UPDATE inspection_items SET result=? WHERE id=?",
+                         (result, existing["id"]))
+        elif note is not None:
+            conn.execute("UPDATE inspection_items SET note=? WHERE id=?",
+                         (note, existing["id"]))
+    else:
+        conn.execute("INSERT INTO inspection_items (inspection_id, item_id, result, note) VALUES (?,?,?,?)",
+                     (inspection_id, item_id, result, note))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "saved_at": datetime.utcnow().isoformat(timespec="seconds")})
+
+
+# ---------- firewatch rounds ----------
+@app.route("/inspections/<int:inspection_id>/round", methods=["POST"])
+@login_required
+def add_round(inspection_id):
+    conn = get_conn()
+    last = conn.execute(
+        "SELECT MAX(round_no) AS m FROM firewatch_rounds WHERE inspection_id = ?",
+        (inspection_id,)).fetchone()
+    next_no = (last["m"] or 0) + 1
+    f = request.form
+    gps_lat = f.get("gps_lat") or None
+    gps_lng = f.get("gps_lng") or None
+    conn.execute("""
+        INSERT INTO firewatch_rounds (inspection_id, round_no, started_at, location, observations, all_clear, gps_lat, gps_lng)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (inspection_id, next_no,
+          datetime.utcnow().isoformat(timespec="seconds"),
+          f.get("location", "").strip(),
+          f.get("observations", "").strip(),
+          1 if f.get("all_clear") in ("1", "on", "yes") else 0,
+          float(gps_lat) if gps_lat else None,
+          float(gps_lng) if gps_lng else None))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "round_logged", "inspection", inspection_id, f"Round #{next_no}")
+    flash(f"Round #{next_no} logged.", "success")
+    return redirect(url_for("inspection", inspection_id=inspection_id))
+
+
+# ---------- comments / chat ----------
+@app.route("/inspections/<int:inspection_id>/comment", methods=["POST"])
+@login_required
+def add_comment(inspection_id):
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Empty comment.", "error")
+        return redirect(url_for("inspection", inspection_id=inspection_id))
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO inspection_comments (inspection_id, user_id, body, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (inspection_id, session["user_id"], body,
+          datetime.utcnow().isoformat(timespec="seconds")))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "comment", "inspection", inspection_id, body[:80])
+    return redirect(url_for("inspection", inspection_id=inspection_id) + "#comments")
+
+
+# ---------- photo upload ----------
+ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "heic", "heif"}
+
+
+@app.route("/inspections/<int:inspection_id>/photo", methods=["POST"])
+@login_required
+def upload_photo(inspection_id):
+    f = request.files.get("photo")
+    if not f or not f.filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("inspection", inspection_id=inspection_id))
+    ext = f.filename.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_EXT:
+        flash("Unsupported file type.", "error")
+        return redirect(url_for("inspection", inspection_id=inspection_id))
+    folder = os.path.join(UPLOAD_DIR, str(inspection_id))
+    os.makedirs(folder, exist_ok=True)
+    fname = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}_{secure_filename(f.filename)}"
+    f.save(os.path.join(folder, fname))
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO inspection_photos (inspection_id, item_id, filename, caption, uploaded_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (inspection_id, request.form.get("item_id") or None,
+          fname, request.form.get("caption", "").strip(),
+          datetime.utcnow().isoformat(timespec="seconds")))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "photo_uploaded", "inspection", inspection_id, fname)
+    flash("Photo added.", "success")
+    return redirect(url_for("inspection", inspection_id=inspection_id) + "#photos")
+
+
+# ---------- signatures (canvas data URL) ----------
+@app.route("/inspections/<int:inspection_id>/signature", methods=["POST"])
+@login_required
+def save_signature(inspection_id):
+    who = request.form.get("who")  # 'inspector' or 'customer'
+    data_url = request.form.get("data_url", "")
+    if who not in ("inspector", "customer") or not data_url.startswith("data:image"):
+        return jsonify({"ok": False}), 400
+    col = "inspector_signature" if who == "inspector" else "customer_signature"
+    conn = get_conn()
+    conn.execute(f"UPDATE inspections SET {col} = ? WHERE id = ?", (data_url, inspection_id))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
+
+
+# ---------- barcode lookup ----------
+@app.route("/api/lookup_barcode")
+@login_required
+def lookup_barcode():
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "missing code"}), 400
+    conn = get_conn()
+    d = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name FROM devices d
+        JOIN sites s ON s.id = d.site_id
+        WHERE d.barcode = ? OR d.serial = ?
+    """, (code, code)).fetchone()
+    conn.close()
+    if not d:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True, "device": dict(d)})
+
+
+# ---------- complete + report ----------
+@app.route("/inspections/<int:inspection_id>/complete", methods=["POST"])
+@login_required
+def complete_inspection(inspection_id):
+    f = request.form
+    conn = get_conn()
+    # Don't overwrite drawn signatures (data URLs) with empty strings
+    sets = ["status='completed'", "completed_at=?", "customer_email=?", "notes=?"]
+    vals = [datetime.utcnow().isoformat(timespec="seconds"),
+            f.get("customer_email", "").strip(),
+            f.get("notes", "").strip()]
+    if f.get("inspector_signature"):
+        sets.append("inspector_signature=?"); vals.append(f.get("inspector_signature").strip())
+    if f.get("customer_signature"):
+        sets.append("customer_signature=?"); vals.append(f.get("customer_signature").strip())
+    vals.append(inspection_id)
+    conn.execute(f"UPDATE inspections SET {', '.join(sets)} WHERE id = ?", vals)
+
+    insp = conn.execute("SELECT site_id, template_slug FROM inspections WHERE id = ?",
+                        (inspection_id,)).fetchone()
+    if insp:
+        slug = insp["template_slug"]
+        months = TEMPLATES[slug].get("frequency_months") or 0
+        if months:
+            next_due = (datetime.utcnow().date() + timedelta(days=months * 30)).isoformat()
+            device_type_map = {
+                "fire_extinguisher": "extinguisher",
+                "fire_alarm": "fire_alarm_panel",
+                "kitchen_suppression": "kitchen_suppression",
+                "emergency_lighting": "emergency_light",
+            }
+            dt = device_type_map.get(slug)
+            if dt:
+                conn.execute("""
+                    UPDATE devices SET last_inspected = ?, next_due = ?
+                    WHERE site_id = ? AND device_type = ?
+                """, (datetime.utcnow().date().isoformat(), next_due, insp["site_id"], dt))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "inspection_completed", "inspection", inspection_id)
+    flash("Inspection completed and report ready.", "success")
+    return redirect(url_for("report", inspection_id=inspection_id))
+
+
+@app.route("/inspections/<int:inspection_id>/report")
+@login_required
+def report(inspection_id):
+    conn = get_conn()
+    insp = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, s.address, s.contact_name, s.contact_phone,
+               u.full_name AS inspector_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.id = ?
+    """, (inspection_id,)).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    items = conn.execute(
+        "SELECT * FROM inspection_items WHERE inspection_id = ?", (inspection_id,)
+    ).fetchall()
+    rounds = conn.execute(
+        "SELECT * FROM firewatch_rounds WHERE inspection_id = ? ORDER BY round_no ASC",
+        (inspection_id,)
+    ).fetchall()
+    photos = conn.execute(
+        "SELECT * FROM inspection_photos WHERE inspection_id = ? ORDER BY uploaded_at ASC",
+        (inspection_id,)
+    ).fetchall()
+    conn.close()
+    answers = {row["item_id"]: dict(row) for row in items}
+    template = get_template(insp["template_slug"])
+
+    counts = {"pass": 0, "fail": 0, "na": 0, "unanswered": 0}
+    for item in all_items(insp["template_slug"]):
+        if item["type"] != "check": continue
+        ans = answers.get(item["id"])
+        if not ans or not ans.get("result"):
+            counts["unanswered"] += 1
+        else:
+            counts[ans["result"]] = counts.get(ans["result"], 0) + 1
+
+    # Build a mailto URL for "Email this report"
+    base_url = request.url_root.rstrip("/")
+    report_url = base_url + url_for("report", inspection_id=inspection_id)
+    subject = f"IGH Inspection Report - {insp['customer_name']} - {template['name']}"
+    body = (f"Hi {insp['contact_name'] or 'team'},%0D%0A%0D%0A"
+            f"Your IGH inspection is complete. Summary:%0D%0A"
+            f"  Pass: {counts['pass']}  Fail: {counts['fail']}  N/A: {counts['na']}%0D%0A%0D%0A"
+            f"Full report: {report_url}%0D%0A%0D%0A"
+            f"Thanks,%0D%0A{insp['inspector_name']}%0D%0AIGH Health, Fire & Safety")
+    mailto = f"mailto:{quote(insp['customer_email'] or '')}?subject={quote(subject)}&body={body}"
+
+    return render_template("report.html", insp=insp, template=template,
+                           answers=answers, counts=counts, rounds=rounds, photos=photos,
+                           mailto=mailto)
+
+
+@app.route("/reports")
+@login_required
+def reports():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, u.full_name AS inspector_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.status = 'completed'
+        ORDER BY i.completed_at DESC
+    """).fetchall()
+    conn.close()
+    return render_template("reports.html", inspections=rows)
+
+
+# ---------- admin: template editor + activity log ----------
+@app.route("/admin/templates", methods=["GET", "POST"])
+@login_required
+@admin_required
+def admin_templates():
+    error = None
+    if request.method == "POST":
+        slug = request.form.get("slug", "").strip()
+        body = request.form.get("body", "").strip()
+        slug = re.sub(r"[^a-z0-9_]", "_", slug.lower())
+        if not slug:
+            error = "Slug required."
+        else:
+            try:
+                parsed = json.loads(body)
+                assert isinstance(parsed, dict) and "name" in parsed and "sections" in parsed
+                TEMPLATES[slug] = parsed
+                save_overrides()
+                log_event(session["user_id"], "template_edited", "template", None, slug)
+                flash(f"Template '{slug}' saved.", "success")
+                return redirect(url_for("admin_templates"))
+            except Exception as e:
+                error = f"Invalid JSON: {e}"
+    return render_template("admin_templates.html", templates=TEMPLATES, error=error)
+
+
+@app.route("/admin/templates/<slug>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_template_delete(slug):
+    if slug in TEMPLATES:
+        TEMPLATES.pop(slug)
+        save_overrides()
+        log_event(session["user_id"], "template_deleted", "template", None, slug)
+        flash(f"Template '{slug}' removed.", "success")
+    return redirect(url_for("admin_templates"))
+
+
+@app.route("/admin/events")
+@login_required
+@admin_required
+def admin_events():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT e.*, u.full_name AS user_name FROM events e
+        LEFT JOIN users u ON u.id = e.user_id
+        ORDER BY e.created_at DESC LIMIT 200
+    """).fetchall()
+    conn.close()
+    return render_template("admin_events.html", events=rows)
+
+
+# ---------- email via Resend ----------
+from mailer import send_report_email
+
+
+@app.route("/inspections/<int:inspection_id>/email", methods=["POST"])
+@login_required
+def email_report(inspection_id):
+    """Send the report to the customer via Resend."""
+    conn = get_conn()
+    insp = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, s.contact_name,
+               u.full_name AS inspector_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.id = ?
+    """, (inspection_id,)).fetchone()
+    conn.close()
+    if not insp:
+        abort(404)
+    to = request.form.get("to") or insp["customer_email"]
+    if not to:
+        flash("No customer email on file.", "error")
+        return redirect(url_for("report", inspection_id=inspection_id))
+    template = get_template(insp["template_slug"])
+    report_url = request.url_root.rstrip("/") + url_for("report", inspection_id=inspection_id)
+    html = render_template("email_report.html", insp=insp, template=template, report_url=report_url)
+    ok, info = send_report_email(
+        to,
+        f"IGH Inspection Report - {insp['customer_name']} - {template['name']}",
+        html,
+    )
+    if ok:
+        log_event(session["user_id"], "report_emailed", "inspection", inspection_id, to)
+        flash(f"Report emailed to {to}.", "success")
+    else:
+        flash(f"Email failed: {info}", "error")
+    return redirect(url_for("report", inspection_id=inspection_id))
+
+
+# ---------- PWA ----------
+@app.route("/manifest.webmanifest")
+def manifest():
+    return send_from_directory("static", "manifest.webmanifest", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def sw():
+    return send_from_directory("static", "sw.js", mimetype="application/javascript")
+
+
+@app.route("/static/uploads/<int:inspection_id>/<path:filename>")
+def uploaded_file(inspection_id, filename):
+    return send_from_directory(os.path.join(UPLOAD_DIR, str(inspection_id)), filename)
+
+
+# ---------- entry ----------
+if __name__ == "__main__":
+    print("")
+    print("  IGH fireNspec - http://localhost:5000")
+    print("  login: inspector / igh2026  (admin / igh2026 for admin features)")
+    print("")
+    app.run(host="0.0.0.0", port=5000, debug=True)

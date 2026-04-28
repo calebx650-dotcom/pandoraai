@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Sites · IGH fireNspec{% endblock %}
+{% block topbar_title %}Sites & Customers{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <h2>Sites</h2>
+  <p>{{ sites|length }} location{{ '' if sites|length == 1 else 's' }} on file</p>
+</div>
+
+<form class="searchbar" method="get">
+  <input type="search" name="q" placeholder="Search by customer, site, or address" value="{{ q }}" autocomplete="off">
+</form>
+
+{% if sites %}
+<div class="card">
+  {% for s in sites %}
+  <a class="row clickable" href="{{ url_for('site_detail', site_id=s.id) }}">
+    <div class="icon">🏢</div>
+    <div class="meta">
+      <div class="title">{{ s.customer_name }}</div>
+      <div class="sub">{{ s.site_name }}{% if s.address %} · {{ s.address }}{% endif %}</div>
+      <div class="sub" style="margin-top:2px;">{{ s.device_count }} device{{ '' if s.device_count == 1 else 's' }}</div>
+    </div>
+    <span class="chev">›</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty"><div class="big">🏢</div>No sites match.</div></div>
+{% endif %}
+
+<div style="padding: 16px;">
+  <a href="{{ url_for('new_site') }}" class="btn full secondary">+ Add new site</a>
+</div>
+{% endblock %}
