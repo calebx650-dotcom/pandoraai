@@ -6,61 +6,44 @@
   <meta name="theme-color" content="#13334A">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="fireNspec">
+  <meta name="apple-mobile-web-app-title" content="Spectofire">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/logo.svg">
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
-  <title>{% block title %}IGH fireNspec{% endblock %}</title>
+  <title>{% block title %}Spectofire{% endblock %}</title>
 </head>
 <body>
 <div class="app">
-
   {% if request.endpoint != 'login' %}
   <header class="topbar">
     <img src="/static/logo.svg" alt="" class="logo">
     <div>
-      <h1>{% block topbar_title %}IGH fireNspec{% endblock %}</h1>
+      <h1>{% block topbar_title %}Spectofire{% endblock %}</h1>
       <div class="sub">IGH HEALTH FIRE SAFETY</div>
     </div>
     <div class="spacer"></div>
     <div class="conn"><span class="dot"></span><span class="txt">Online</span></div>
   </header>
   {% endif %}
-
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
       <div class="flash {{ cat }}">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
-
   {% block content %}{% endblock %}
-
   {% if request.endpoint != 'login' %}
   <nav class="tabbar">
-    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
-      <span class="ico">Home</span>
-    </a>
-    <a href="{{ url_for('new_inspection') }}" class="{% if request.endpoint in ['new_inspection','inspection'] %}active{% endif %}">
-      <span class="ico">Inspect</span>
-    </a>
-    <a href="{{ url_for('sites') }}" class="{% if request.endpoint in ['sites','site_detail','new_site'] %}active{% endif %}">
-      <span class="ico">Sites</span>
-    </a>
-    <a href="{{ url_for('reports') }}" class="{% if request.endpoint in ['reports','report'] %}active{% endif %}">
-      <span class="ico">Reports</span>
-    </a>
+    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}"><span class="ico">Home</span></a>
+    <a href="{{ url_for('new_inspection') }}" class="{% if request.endpoint in ['new_inspection','inspection'] %}active{% endif %}"><span class="ico">Inspect</span></a>
+    <a href="{{ url_for('sites') }}" class="{% if request.endpoint in ['sites','site_detail','new_site'] %}active{% endif %}"><span class="ico">Sites</span></a>
+    <a href="{{ url_for('reports') }}" class="{% if request.endpoint in ['reports','report'] %}active{% endif %}"><span class="ico">Reports</span></a>
     {% if current_role == 'admin' %}
-    <a href="{{ url_for('admin_events') }}" class="{% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}">
-      <span class="ico">Admin</span>
-    </a>
+    <a href="{{ url_for('admin_events') }}" class="{% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}"><span class="ico">Admin</span></a>
     {% endif %}
-    <a href="{{ url_for('logout') }}">
-      <span class="ico">Sign out</span>
-    </a>
+    <a href="{{ url_for('logout') }}"><span class="ico">Sign out</span></a>
   </nav>
   {% endif %}
-
 </div>
 <script src="/static/app.js"></script>
 </body>

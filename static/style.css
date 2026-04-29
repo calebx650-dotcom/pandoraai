@@ -352,3 +352,307 @@ form { margin: 0; }
   border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
 }
 .sig-pad-actions .sig-status { color: var(--pass); font-weight: 600; }
+
+/* ============================================================
+   SPECTOFIRE REPORT - styled to match the IGH PDF reference
+   ============================================================ */
+.report {
+  background: white;
+  max-width: 760px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1F1F23;
+}
+.rpage {
+  position: relative;
+  min-height: 1050px;
+  background: white;
+  padding: 0;
+  margin: 0 0 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  page-break-after: always;
+  break-after: page;
+}
+.rpage-bar {
+  background: #5879A8;
+  height: 8px;
+  width: 100%;
+}
+.rpage-bar.bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+.rpage-body {
+  padding: 32px 56px 64px;
+  min-height: 950px;
+}
+.rpage-num {
+  position: absolute;
+  bottom: 14px;
+  right: 32px;
+  font-size: 36px;
+  font-weight: 700;
+  color: #5879A8;
+  letter-spacing: 1px;
+}
+
+/* COVER PAGE */
+.rcover-logo { margin: 12px 0 36px; }
+.rcover-logo img {
+  width: 120px; height: 120px;
+  background: white;
+  border: 4px solid #13334A;
+  border-radius: 4px;
+  padding: 8px;
+}
+.rcover-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1F1F23;
+  margin: 0 0 28px;
+}
+.rdiv-line {
+  height: 2px;
+  width: 60px;
+  background: #5879A8;
+  margin: 22px 0 14px;
+}
+.rdiv-line.short { width: 100px; margin: 0 auto 14px; }
+.rblock {
+  margin: 0 0 18px;
+}
+.rblock-label {
+  font-size: 14px;
+  color: #4A4A52;
+  margin-bottom: 4px;
+}
+.rblock-value {
+  font-size: 16px;
+  color: #1F1F23;
+  line-height: 1.5;
+}
+.rcover-mid {
+  background: #EBF1F8;
+  border-radius: 4px;
+  padding: 28px;
+  margin: 32px 0;
+}
+.rcover-attestation {
+  font-size: 15px;
+  color: #1F1F23;
+  line-height: 1.6;
+}
+
+/* SECTION TITLES (page 2+) */
+.rsection-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1F1F23;
+  margin: 0 0 22px;
+}
+
+/* INFO HEADER BARS (CUSTOMER INFORMATION etc.) */
+.rinfo-header {
+  background: #DDE7F2;
+  color: #1F1F23;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .5px;
+  padding: 10px 14px;
+  margin: 18px 0 0;
+}
+
+/* INFO TABLES */
+.rinfo-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.rinfo-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #EFEFEF;
+  vertical-align: top;
+}
+.rinfo-table td.lbl {
+  color: #4A4A52;
+  width: 16%;
+  white-space: nowrap;
+}
+
+/* SUMMARY TABLE */
+.rsummary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.rsummary-table th {
+  background: white;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4A4A52;
+  letter-spacing: .5px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid #C5D2E0;
+}
+.rsummary-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #EFEFEF;
+}
+
+/* DETAIL BLOCKS (per Patrol Log etc.) */
+.rdetail-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #5879A8;
+  margin: 22px 0 8px;
+  font-style: italic;
+}
+.rdetail-block {
+  border: 0;
+  margin-bottom: 22px;
+}
+.rdetail-section-head {
+  background: #EBF1F8;
+  color: #1F1F23;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 14px;
+  margin: 8px 0 0;
+}
+.rdetail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 0;
+}
+.rdetail-table td {
+  padding: 8px 14px;
+  border: 1px solid #EFEFEF;
+}
+.rdetail-table td.lbl {
+  color: #1F1F23;
+  width: 50%;
+  font-weight: 400;
+}
+.rdetail-result {
+  padding: 10px 14px;
+  border: 1px solid #EFEFEF;
+  font-size: 13px;
+  text-align: right;
+}
+.result-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.result-dot.pass { background: #1F8B4C; }
+.result-dot.fail { background: #C5283D; }
+.result-dot.na   { background: #8A8A93; }
+
+/* SIGN-OFF */
+.rsignoff {
+  text-align: center;
+  margin: 80px auto 0;
+  max-width: 320px;
+}
+.rsignoff-label {
+  font-size: 14px;
+  color: #4A4A52;
+  margin-bottom: 24px;
+}
+.rsignoff-sig {
+  min-height: 70px;
+  margin-bottom: 12px;
+  font-style: italic;
+  color: #4A4A52;
+}
+.rsignoff-sig img {
+  max-width: 200px;
+  max-height: 70px;
+  object-fit: contain;
+}
+.rsignoff-name { font-size: 15px; margin-bottom: 4px; }
+.rsignoff-co { font-size: 12px; color: #4A4A52; }
+
+/* PHOTO GRID inside report */
+.rphoto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.rphoto img {
+  width: 100%; height: 140px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #DDD;
+}
+.rphoto-caption {
+  font-size: 11px; color: #4A4A52;
+  margin-top: 4px;
+}
+
+/* PRINT MODE - hide app chrome */
+@media print {
+  .topbar, .tabbar, .fab, .no-print, .btn { display: none !important; }
+  body, .app { background: white; padding: 0; margin: 0; }
+  .app { max-width: 100%; padding: 0; }
+  .report { box-shadow: none; max-width: 100%; }
+  .rpage {
+    box-shadow: none;
+    margin: 0;
+    page-break-after: always;
+    break-after: page;
+  }
+  .rpage:last-child { page-break-after: auto; }
+}
+
+/* Cover map block */
+.rcover-mapwrap {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 18px;
+  background: #EBF1F8;
+  border-radius: 4px;
+  padding: 18px;
+  margin: 28px 0;
+  align-items: start;
+}
+.rcover-map {
+  background: white;
+  border: 1px solid #C5D2E0;
+  border-radius: 3px;
+  overflow: hidden;
+  min-height: 220px;
+}
+.rcover-map img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rmap-fallback {
+  padding: 30px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: #4A4A52;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.rmap-pin {
+  display: inline-block;
+  background: #C5283D;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+@media (max-width: 600px) {
+  .rcover-mapwrap { grid-template-columns: 1fr; }
+}

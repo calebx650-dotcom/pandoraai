@@ -1,11 +1,11 @@
 {
-  "name": "IGH fireNspec",
-  "short_name": "fireNspec",
+  "name": "Spectofire",
+  "short_name": "Spectofire",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#13334A",
   "theme_color": "#13334A",
-  "description": "Fire safety inspections for IGH Health, Fire & Safety.",
+  "description": "Spectofire - Fire safety inspections by IGH Health, Fire & Safety.",
   "icons": [
     { "src": "/static/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]

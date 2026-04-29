@@ -1,6 +1,6 @@
-# IGH fireNspec - Mobile Inspection MVP
+# Spectofire - Mobile Inspection MVP
 
-A mobile-friendly fire-safety inspection app built for **IGH Health, Fire & Safety** (DFW). Modeled on the workflow of fireNspec Pro, rebuilt as a Python/Flask MVP.
+A mobile-friendly fire-safety inspection app built for **IGH Health, Fire & Safety** (DFW). Modeled on the workflow of Spectofire Pro, rebuilt as a Python/Flask MVP.
 
 The web UI is mobile-first and PWA-ready, so technicians can "Add to Home Screen" on iPhone/iPad and use it like a native app.
 
@@ -20,7 +20,7 @@ Then open `http://localhost:5000` (or `http://<your-LAN-ip>:5000` from a phone o
 | inspector | igh2026  | Inspector | All inspection work, sites, devices, reports      |
 | admin     | igh2026  | Admin     | Inspector access + template editor + activity log |
 
-## fireNspec parity feature checklist
+## Spectofire parity feature checklist
 
 | Capability                                | Status |
 |-------------------------------------------|--------|
@@ -117,7 +117,7 @@ GET  /sw.js
 GET  /static/uploads/<id>/<filename>
 ```
 
-## Bugs / UX improvements vs. typical fireNspec complaints
+## Bugs / UX improvements vs. typical Spectofire complaints
 
 1. **Lost edits on navigation** - every change auto-POSTs, "Saved" indicator in header.
 2. **Tiny tap targets** - 48px minimum on every control (iOS HIG).

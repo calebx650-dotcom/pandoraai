@@ -6,11 +6,14 @@ Run:
 """
 import os
 import re
+import io
 import json
+import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 from urllib.parse import quote
 from werkzeug.utils import secure_filename
+import qrcode
 
 from flask import (
     Flask, render_template, request, redirect, url_for, session,
@@ -35,6 +38,20 @@ UPLOAD_DIR = os.path.join(os.environ.get("DATA_DIR", os.path.dirname(__file__)),
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 init_db()
+
+
+# Company info shown on every report (edit here or override via env vars)
+COMPANY = {
+    "name":    os.environ.get("COMPANY_NAME",    "IGH Health, Fire & Safety, LLC"),
+    "address": os.environ.get("COMPANY_ADDRESS", "2719 Trail Oak Ct"),
+    "city":    os.environ.get("COMPANY_CITY",    "Arlington"),
+    "state":   os.environ.get("COMPANY_STATE",   "TX"),
+    "zip":     os.environ.get("COMPANY_ZIP",     "76016"),
+    "license": os.environ.get("COMPANY_LICENSE", "ECR-3372489"),
+    "email":   os.environ.get("COMPANY_EMAIL",   "info@ighsafety.com"),
+    "phone":   os.environ.get("COMPANY_PHONE",   "(817) 809-8677"),
+}
+
 
 
 # ---------- helpers ----------
@@ -165,9 +182,24 @@ def dashboard():
         WHERE d.next_due IS NOT NULL AND d.next_due >= ? AND d.next_due <= ?
         ORDER BY d.next_due ASC
     """, (today, (datetime.utcnow().date() + timedelta(days=30)).isoformat())).fetchall()
+    # Extinguishers approaching/past 7-yr hydrostatic test
+    ext_rows = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name FROM devices d
+        JOIN sites s ON s.id = d.site_id
+        WHERE d.device_type='extinguisher' AND d.manufactured_date IS NOT NULL
+    """).fetchall()
+    hydro_due = []
+    for er in ext_rows:
+        st, msg = expiration_status(dict(er))
+        if st in ("overdue", "due-soon"):
+            d = dict(er); d["exp_status"] = st; d["exp_msg"] = msg
+            hydro_due.append(d)
+    hydro_due.sort(key=lambda x: x.get("manufactured_date") or "")
+
     conn.close()
     return render_template("dashboard.html",
-        in_progress=in_progress, recent=recent, overdue=overdue, upcoming=upcoming)
+        in_progress=in_progress, recent=recent, overdue=overdue, upcoming=upcoming,
+        hydro_due=hydro_due)
 
 
 # ---------- sites ----------
@@ -230,8 +262,19 @@ def site_detail(site_id):
         JOIN users u ON u.id = i.inspector_id
         WHERE i.site_id = ? ORDER BY i.started_at DESC
     """, (site_id,)).fetchall()
+    devices_with_status = []
+    for dv in devices:
+        dvd = dict(dv)
+        if dvd.get("device_type") == "extinguisher":
+            st, msg = expiration_status(dvd)
+            dvd["exp_status"] = st
+            dvd["exp_msg"] = msg
+        else:
+            dvd["exp_status"] = "ok"; dvd["exp_msg"] = ""
+        devices_with_status.append(dvd)
     conn.close()
-    return render_template("site_detail.html", site=site, devices=devices, inspections=inspections)
+    return render_template("site_detail.html", site=site,
+                           devices=devices_with_status, inspections=inspections)
 
 
 @app.route("/sites/<int:site_id>/devices/new", methods=["POST"])
@@ -554,9 +597,26 @@ def report(inspection_id):
             f"Thanks,%0D%0A{insp['inspector_name']}%0D%0AIGH Health, Fire & Safety")
     mailto = f"mailto:{quote(insp['customer_email'] or '')}?subject={quote(subject)}&body={body}"
 
+    # Pull every extinguisher at this site so the report can list them with status
+    conn2 = get_conn()
+    site_devices = conn2.execute(
+        "SELECT * FROM devices WHERE site_id = ? AND device_type = 'extinguisher' ORDER BY location",
+        (insp["site_id"],)
+    ).fetchall()
+    conn2.close()
+    extinguishers = []
+    for sd in site_devices:
+        sdd = dict(sd)
+        st, msg = expiration_status(sdd)
+        sdd["exp_status"] = st
+        sdd["exp_msg"] = msg
+        extinguishers.append(sdd)
+
     return render_template("report.html", insp=insp, template=template,
                            answers=answers, counts=counts, rounds=rounds, photos=photos,
-                           mailto=mailto)
+                           mailto=mailto, company=COMPANY,
+                           occupancy="Commercial", patrol_interval="15 minutes",
+                           extinguishers=extinguishers)
 
 
 @app.route("/reports")
@@ -665,6 +725,143 @@ def email_report(inspection_id):
     else:
         flash(f"Email failed: {info}", "error")
     return redirect(url_for("report", inspection_id=inspection_id))
+
+
+# ---------- devices, QR codes, expiration tracking ----------
+def years_since(iso_date):
+    """Return float years since the given ISO date string, or None."""
+    if not iso_date:
+        return None
+    try:
+        d = datetime.fromisoformat(iso_date).date()
+        days = (datetime.utcnow().date() - d).days
+        return round(days / 365.25, 1)
+    except Exception:
+        return None
+
+
+def expiration_status(device):
+    """Return ('ok'|'due-soon'|'overdue', message) for a device based on 7-yr rule."""
+    if not device:
+        return ("ok", "")
+    if device.get("device_type") != "extinguisher":
+        return ("ok", "")
+    yrs = years_since(device.get("manufactured_date"))
+    if yrs is None:
+        return ("unknown", "Manufacture date not recorded")
+    if yrs >= 7:
+        return ("overdue", f"Hydrostatic test OVERDUE ({yrs} yrs since manufacture)")
+    if yrs >= 6:
+        return ("due-soon", f"Hydrostatic test due soon ({yrs} yrs since manufacture)")
+    return ("ok", f"{yrs} yrs since manufacture")
+
+
+@app.template_filter("years_since")
+def _years_since_filter(iso):
+    y = years_since(iso)
+    return f"{y} yrs" if y is not None else "-"
+
+
+@app.route("/devices/<int:device_id>")
+@login_required
+def device_detail(device_id):
+    conn = get_conn()
+    d = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name, s.address
+        FROM devices d JOIN sites s ON s.id = d.site_id
+        WHERE d.id = ?
+    """, (device_id,)).fetchone()
+    if not d:
+        conn.close(); abort(404)
+    history = conn.execute("""
+        SELECT i.*, u.full_name AS inspector_name
+        FROM inspections i
+        LEFT JOIN users u ON u.id = i.inspector_id
+        WHERE i.device_id = ? OR (i.site_id = ? AND i.template_slug = 'fire_extinguisher')
+        ORDER BY i.started_at DESC LIMIT 20
+    """, (device_id, d["site_id"])).fetchall()
+    photos = conn.execute(
+        "SELECT * FROM inspection_photos WHERE device_id = ? ORDER BY uploaded_at DESC",
+        (device_id,)
+    ).fetchall()
+    conn.close()
+    status, msg = expiration_status(dict(d))
+    return render_template("device_detail.html", device=d, history=history,
+                           photos=photos, status=status, status_msg=msg)
+
+
+@app.route("/qr/<token>")
+def device_by_qr(token):
+    """Public QR-scan landing. Asks for login if not authed, then shows device detail."""
+    conn = get_conn()
+    d = conn.execute("SELECT id FROM devices WHERE qr_token = ?", (token,)).fetchone()
+    conn.close()
+    if not d:
+        abort(404)
+    if "user_id" not in session:
+        return redirect(url_for("login", next=url_for("device_detail", device_id=d["id"])))
+    return redirect(url_for("device_detail", device_id=d["id"]))
+
+
+@app.route("/devices/<int:device_id>/qr.png")
+@login_required
+def device_qr_png(device_id):
+    conn = get_conn()
+    d = conn.execute("SELECT qr_token FROM devices WHERE id = ?", (device_id,)).fetchone()
+    conn.close()
+    if not d or not d["qr_token"]:
+        abort(404)
+    base_url = request.url_root.rstrip("/")
+    target = f"{base_url}/qr/{d['qr_token']}"
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(target)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#13334A", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    from flask import send_file
+    return send_file(buf, mimetype="image/png", download_name=f"qr_{device_id}.png")
+
+
+@app.route("/devices/<int:device_id>/edit", methods=["POST"])
+@login_required
+def edit_device(device_id):
+    f = request.form
+    conn = get_conn()
+    conn.execute("""
+        UPDATE devices SET
+            extinguisher_type = ?, extinguisher_size = ?,
+            manufactured_date = ?, last_service_date = ?,
+            location = ?, model = ?, serial = ?, barcode = ?, notes = ?
+        WHERE id = ?
+    """, (f.get("extinguisher_type"), f.get("extinguisher_size"),
+          f.get("manufactured_date") or None, f.get("last_service_date") or None,
+          f.get("location"), f.get("model"), f.get("serial"),
+          f.get("barcode"), f.get("notes"), device_id))
+    # Make sure it has a QR token
+    row = conn.execute("SELECT qr_token FROM devices WHERE id=?", (device_id,)).fetchone()
+    if not row["qr_token"]:
+        conn.execute("UPDATE devices SET qr_token=? WHERE id=?",
+                     (secrets.token_urlsafe(12), device_id))
+    conn.commit()
+    conn.close()
+    log_event(session["user_id"], "device_edited", "device", device_id)
+    flash("Device updated.", "success")
+    return redirect(url_for("device_detail", device_id=device_id))
+
+
+@app.route("/devices/<int:device_id>/regen-qr", methods=["POST"])
+@login_required
+def regen_qr(device_id):
+    conn = get_conn()
+    conn.execute("UPDATE devices SET qr_token=? WHERE id=?",
+                 (secrets.token_urlsafe(12), device_id))
+    conn.commit()
+    conn.close()
+    log_event(session["user_id"], "qr_regenerated", "device", device_id)
+    flash("QR code regenerated.", "success")
+    return redirect(url_for("device_detail", device_id=device_id))
 
 
 # ---------- PWA ----------

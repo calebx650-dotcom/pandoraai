@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ device.barcode or device.serial }} - Spectofire{% endblock %}
+{% block topbar_title %}Device Details{% endblock %}
+{% block content %}
+
+<div class="pagehead">
+  <h2>{{ device.extinguisher_type or device.model or device.device_type }}</h2>
+  <p>
+    <strong>{{ device.barcode or device.serial }}</strong> at {{ device.customer_name }} &middot; {{ device.site_name }}
+  </p>
+</div>
+
+{% if status == 'overdue' %}
+<div class="flash error" style="margin: 10px 16px;"><strong>Hydrostatic test overdue.</strong> {{ status_msg }}</div>
+{% elif status == 'due-soon' %}
+<div class="flash" style="margin: 10px 16px; background: var(--warn-bg); color: var(--warn);"><strong>Service due soon.</strong> {{ status_msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="row"><div class="meta"><div class="title">Type</div><div class="sub">{{ device.extinguisher_type or '-' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Size</div><div class="sub">{{ device.extinguisher_size or '-' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Model</div><div class="sub">{{ device.model or '-' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Serial</div><div class="sub">{{ device.serial or '-' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Location</div><div class="sub">{{ device.location or '-' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Manufactured</div><div class="sub">{{ device.manufactured_date|fmtdate if device.manufactured_date else 'Not recorded' }} &middot; {{ device.manufactured_date|years_since }} ago</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Last serviced</div><div class="sub">{{ device.last_service_date|fmtdate if device.last_service_date else 'Not recorded' }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Last inspected</div><div class="sub">{{ device.last_inspected|fmtdate }}</div></div></div>
+  <div class="row"><div class="meta"><div class="title">Next due</div><div class="sub">{{ device.next_due|fmtdate }}</div></div></div>
+</div>
+
+<div class="card-title">QR Code</div>
+<div class="card" style="padding: 18px; text-align: center;">
+  <img src="{{ url_for('device_qr_png', device_id=device.id) }}"
+       alt="QR code"
+       style="width: 200px; height: 200px; image-rendering: pixelated;">
+  <div style="font-size: 12px; color: var(--ink-3); margin-top: 8px;">
+    Scan with any phone camera to open this device's profile.
+  </div>
+  <form method="post" action="{{ url_for('regen_qr', device_id=device.id) }}" style="margin-top: 12px;">
+    <button type="submit" class="btn ghost" style="font-size: 12px; padding: 8px 14px; min-height: 0;">Regenerate QR</button>
+    <a href="{{ url_for('device_qr_png', device_id=device.id) }}" download
+       class="btn ghost" style="font-size: 12px; padding: 8px 14px; min-height: 0; margin-left: 6px;">Download PNG</a>
+  </form>
+</div>
+
+<div class="card-title">Edit details</div>
+<form method="post" action="{{ url_for('edit_device', device_id=device.id) }}">
+  <div class="card" style="padding: 6px 0;">
+    <div class="field"><label>Type</label>
+      <select name="extinguisher_type">
+        {% for t in ['ABC Dry Chemical','Class K (Wet Chemical)','CO2','Water','Foam (AFFF)','Halotron','Other'] %}
+          <option value="{{ t }}" {% if device.extinguisher_type == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field"><label>Size</label>
+      <input type="text" name="extinguisher_size" value="{{ device.extinguisher_size or '' }}" placeholder="e.g. 5 lb, 10 lb, 6 L">
+    </div>
+    <div class="field"><label>Manufactured date</label>
+      <input type="date" name="manufactured_date" value="{{ device.manufactured_date or '' }}">
+      <div class="hint">7-yr hydrostatic test calculated from this date.</div>
+    </div>
+    <div class="field"><label>Last service date</label>
+      <input type="date" name="last_service_date" value="{{ device.last_service_date or '' }}">
+    </div>
+    <div class="field"><label>Location</label><input type="text" name="location" value="{{ device.location or '' }}"></div>
+    <div class="field"><label>Model</label><input type="text" name="model" value="{{ device.model or '' }}"></div>
+    <div class="field"><label>Serial #</label><input type="text" name="serial" value="{{ device.serial or '' }}"></div>
+    <div class="field"><label>Barcode / asset tag</label><input type="text" name="barcode" value="{{ device.barcode or '' }}"></div>
+    <div class="field"><label>Notes</label><textarea name="notes" rows="3">{{ device.notes or '' }}</textarea></div>
+  </div>
+  <div style="padding: 16px;">
+    <button type="submit" class="btn full">Save</button>
+  </div>
+</form>
+
+{% if photos %}
+<div class="card-title">Photos ({{ photos|length }})</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; padding: 0 16px 16px;">
+  {% for p in photos %}
+  <a href="{{ url_for('uploaded_file', inspection_id=p.inspection_id, filename=p.filename) }}" target="_blank">
+    <img src="{{ url_for('uploaded_file', inspection_id=p.inspection_id, filename=p.filename) }}"
+         style="width: 100%; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if history %}
+<div class="card-title">Inspection history</div>
+<div class="card">
+  {% for h in history %}
+  <a class="row clickable" href="{% if h.status == 'completed' %}{{ url_for('report', inspection_id=h.id) }}{% else %}{{ url_for('inspection', inspection_id=h.id) }}{% endif %}">
+    <div class="meta">
+      <div class="title">{{ TEMPLATES[h.template_slug].name if h.template_slug in TEMPLATES else h.template_slug }}</div>
+      <div class="sub">{{ h.inspector_name }} &middot; {{ (h.completed_at or h.started_at)|fmtdate }}</div>
+    </div>
+    <span class="pill {{ h.status }}">{{ h.status.replace('_',' ') }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div style="padding: 16px;">
+  <a href="{{ url_for('site_detail', site_id=device.site_id) }}" class="btn ghost full">Back to {{ device.site_name }}</a>
+</div>
+{% endblock %}

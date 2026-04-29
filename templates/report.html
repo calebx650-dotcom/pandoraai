@@ -1,130 +1,308 @@
 {% extends "base.html" %}
-{% block title %}Report - {{ template.name }} - IGH fireNspec{% endblock %}
+{% block title %}Inspection Report - Spectofire{% endblock %}
 {% block topbar_title %}Inspection Report{% endblock %}
 {% block content %}
 
-<div class="pagehead">
-  <h2>{{ template.icon }} {{ template.name }}</h2>
-  <p><strong>{{ insp.customer_name }} - {{ insp.site_name }}</strong></p>
-  <p>{{ insp.address or '' }}</p>
-  <p style="margin-top:6px;">
-    Completed {{ insp.completed_at|fmtdate }} by {{ insp.inspector_name }}
-    {% if insp.gps_lat %}<br>GPS {{ '%.4f'|format(insp.gps_lat) }}, {{ '%.4f'|format(insp.gps_lng) }}{% endif %}
-  </p>
-</div>
+<div class="report">
 
-{% if not template.is_firewatch %}
-<div class="stats">
-  <div class="stat pass"><div class="num">{{ counts.pass }}</div><div class="lbl">Pass</div></div>
-  <div class="stat fail"><div class="num">{{ counts.fail }}</div><div class="lbl">Fail</div></div>
-  <div class="stat na"><div class="num">{{ counts.na }}</div><div class="lbl">N/A</div></div>
-  <div class="stat"><div class="num">{{ counts.unanswered }}</div><div class="lbl">Skipped</div></div>
-</div>
-{% endif %}
-
-{% if rounds %}
-<div class="section">
-  <h3>Patrol Rounds ({{ rounds|length }})</h3>
-  {% for r in rounds %}
-  <div class="item">
-    <div class="row-flex" style="justify-content: space-between;">
-      <strong>Round #{{ r.round_no }}</strong>
-      <span style="color: var(--ink-3); font-size: 12px;">{{ r.started_at|fmtdate }}</span>
-    </div>
-    <div style="margin-top: 4px;"><strong>{{ r.location }}</strong></div>
-    <div style="margin-top: 2px; color: var(--ink-2);">{{ r.observations or '(no observations)' }}</div>
-    <div style="margin-top: 6px;">
-      {% if r.all_clear %}<span class="pill pass">All clear</span>
-      {% else %}<span class="pill fail">Issue noted</span>{% endif %}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% for section in template.sections %}
-<div class="section">
-  <h3>{{ section.title }}</h3>
-  {% for item in section['items'] %}
-    {% set ans = answers.get(item.id, {}) %}
-    <div class="item">
-      <div class="row-flex" style="justify-content: space-between;">
-        <div class="lbl" style="margin: 0; flex: 1;">{{ item.label }}</div>
-        {% if item.type == 'check' %}
-          {% if ans.get('result') == 'pass' %}<span class="pill pass">Pass</span>
-          {% elif ans.get('result') == 'fail' %}<span class="pill fail">Fail</span>
-          {% elif ans.get('result') == 'na' %}<span class="pill na">N/A</span>
-          {% else %}<span class="pill na">-</span>{% endif %}
-        {% else %}
-          <span style="color: var(--ink-2); font-weight: 600;">{{ ans.get('result') or '-' }}</span>
-        {% endif %}
+  <!-- ========== PAGE 1: COVER ========== -->
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <div class="rcover-logo">
+        <img src="/static/logo.svg" alt="IGH">
       </div>
-      {% if ans.get('note') %}<div class="sub" style="margin-top: 6px; color: var(--ink-2); font-size: 13px;">Note: {{ ans.get('note') }}</div>{% endif %}
-    </div>
-  {% endfor %}
-</div>
-{% endfor %}
+      <h1 class="rcover-title">Inspection Report</h1>
 
-{% if photos %}
-<div class="section">
-  <h3>Photos ({{ photos|length }})</h3>
-  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; padding: 16px;">
-    {% for p in photos %}
-    <a href="{{ url_for('uploaded_file', inspection_id=insp.id, filename=p.filename) }}" target="_blank">
-      <img src="{{ url_for('uploaded_file', inspection_id=insp.id, filename=p.filename) }}"
-           style="width: 100%; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
-      {% if p.caption %}<div style="font-size: 11px; color: var(--ink-3); margin-top: 2px;">{{ p.caption }}</div>{% endif %}
-    </a>
-    {% endfor %}
+      <div class="rdiv-line"></div>
+      <div class="rblock">
+        <div class="rblock-label">Presented To</div>
+        <div class="rblock-value">{{ insp.customer_name }}</div>
+      </div>
+
+      <div class="rdiv-line"></div>
+      <div class="rblock">
+        <div class="rblock-label">For</div>
+        <div class="rblock-value"><strong>{{ insp.site_name }}</strong></div>
+        <div class="rblock-value">{{ insp.address or '' }}</div>
+      </div>
+
+      <!-- ===== MAP + ATTESTATION ===== -->
+      <div class="rcover-mapwrap">
+        <div class="rcover-map">
+          {% if insp.gps_lat and insp.gps_lng %}
+            <img src="https://staticmap.openstreetmap.de/staticmap.php?center={{ insp.gps_lat }},{{ insp.gps_lng }}&zoom=16&size=400x220&markers={{ insp.gps_lat }},{{ insp.gps_lng }},red-pushpin"
+                 alt="Site location"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div class="rmap-fallback" style="display:none;">
+              <div class="rmap-pin">PIN</div>
+              <div>{{ insp.address or insp.site_name }}</div>
+              <div style="font-size:11px; color:#888;">{{ '%.4f'|format(insp.gps_lat) }}, {{ '%.4f'|format(insp.gps_lng) }}</div>
+            </div>
+          {% else %}
+            <div class="rmap-fallback">
+              <div class="rmap-pin">PIN</div>
+              <div>{{ insp.address or insp.site_name }}</div>
+              <div style="font-size:11px; color:#888;">GPS not captured</div>
+            </div>
+          {% endif %}
+        </div>
+        <div class="rcover-attestation">
+          <strong>This site has been inspected and tested in compliance with applicable standards.</strong>
+          <div style="margin-top: 16px;">
+            Completed:<br>
+            <strong>{{ insp.completed_at|fmtdate }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="rdiv-line"></div>
+      <div class="rblock">
+        <div class="rblock-label">Tested By:</div>
+        <div class="rblock-value"><strong>{{ insp.inspector_name }}</strong></div>
+        <div class="rblock-value">{{ company.name }}</div>
+        <div class="rblock-value">{{ company.address }}</div>
+        <div class="rblock-value">{{ company.city }}, {{ company.state }} {{ company.zip }}</div>
+      </div>
+    </div>
+    <div class="rpage-num">01</div>
+    <div class="rpage-bar bottom"></div>
   </div>
-</div>
-{% endif %}
 
-{% if insp.notes %}
-<div class="section">
-  <h3>Inspector Notes</h3>
-  <div class="item" style="white-space: pre-wrap;">{{ insp.notes }}</div>
-</div>
-{% endif %}
+  <!-- ========== PAGE 2: INSPECTION INFORMATION ========== -->
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <h2 class="rsection-title">Inspection Information</h2>
 
-<div class="section">
-  <h3>Sign-off</h3>
-  <div class="signature-block">
-    <div class="sig">
-      <strong>Inspector</strong>
-      {% if insp.inspector_signature and insp.inspector_signature.startswith('data:image') %}
-        <img src="{{ insp.inspector_signature }}" alt="Inspector signature"
-             style="max-width: 100%; height: 60px; object-fit: contain;">
-      {% else %}
-        {{ insp.inspector_signature or insp.inspector_name }}
-      {% endif %}
+      <div class="rinfo-header">CUSTOMER INFORMATION</div>
+      <table class="rinfo-table">
+        <tr><td class="lbl">Name:</td><td>{{ insp.customer_name }}</td>
+            <td class="lbl">Address:</td><td>{{ insp.address or '-' }}</td></tr>
+        <tr><td class="lbl">Contact:</td><td>{{ insp.contact_name or '-' }}</td>
+            <td class="lbl">Phone:</td><td>{{ insp.contact_phone or '-' }}</td></tr>
+      </table>
+
+      <div class="rinfo-header">BUILDING INFORMATION</div>
+      <table class="rinfo-table">
+        <tr><td class="lbl">Name:</td><td>{{ insp.site_name }}</td>
+            <td class="lbl">Occupancy Type:</td><td>{{ occupancy or 'Not determined' }}</td></tr>
+        <tr><td class="lbl">Address:</td><td colspan="3">{{ insp.address or '-' }}</td></tr>
+      </table>
+
+      <div class="rinfo-header">COMPANY INFORMATION</div>
+      <table class="rinfo-table">
+        <tr><td class="lbl">Name:</td><td>{{ company.name }}</td>
+            <td class="lbl">Address:</td><td>{{ company.address }}</td></tr>
+        <tr><td class="lbl">City:</td><td>{{ company.city }}</td>
+            <td class="lbl">State:</td><td>{{ company.state }}</td></tr>
+        <tr><td class="lbl">Zip:</td><td>{{ company.zip }}</td>
+            <td class="lbl">License:</td><td>{{ company.license }}</td></tr>
+        <tr><td class="lbl">Email:</td><td>{{ company.email }}</td>
+            <td class="lbl">Phone:</td><td>{{ company.phone }}</td></tr>
+      </table>
     </div>
-    <div class="sig">
-      <strong>Customer</strong>
-      {% if insp.customer_signature and insp.customer_signature.startswith('data:image') %}
-        <img src="{{ insp.customer_signature }}" alt="Customer signature"
-             style="max-width: 100%; height: 60px; object-fit: contain;">
-      {% else %}
-        {{ insp.customer_signature or '-' }}
-      {% endif %}
-    </div>
+    <div class="rpage-num">02</div>
+    <div class="rpage-bar bottom"></div>
   </div>
-  {% if insp.customer_email %}
-  <div class="item" style="font-size: 13px; color: var(--ink-2);">
-    Report copy: {{ insp.customer_email }}
+
+  <!-- ========== PAGE 3: TESTING SUMMARY + SIGN-OFF ========== -->
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <div class="rinfo-header">TESTING SUMMARY</div>
+      <table class="rsummary-table">
+        <thead>
+          <tr><th>EQUIPMENT TYPE</th><th>TOTAL</th><th>TESTED</th><th>PASSED</th><th>FAILED</th></tr>
+        </thead>
+        <tbody>
+          {% if rounds %}
+          <tr>
+            <td>Fire Watch Initial Inspection Questions</td>
+            <td>1</td><td>1 (100%)</td><td>1 (100%)</td><td>0 (0%)</td>
+          </tr>
+          <tr>
+            <td>Fire Patrol Log</td>
+            <td>{{ rounds|length }}</td>
+            <td>{{ rounds|length }} (100%)</td>
+            <td>{{ rounds|selectattr('all_clear')|list|length }} ({{ ((rounds|selectattr('all_clear')|list|length / rounds|length) * 100)|round|int }}%)</td>
+            <td>{{ rounds|rejectattr('all_clear')|list|length }} ({{ ((rounds|rejectattr('all_clear')|list|length / rounds|length) * 100)|round|int }}%)</td>
+          </tr>
+          {% else %}
+          {% set total = counts.pass + counts.fail + counts.na + counts.unanswered %}
+          {% set tested = counts.pass + counts.fail + counts.na %}
+          <tr>
+            <td>{{ template.name }}</td>
+            <td>{{ total }}</td>
+            <td>{{ tested }} ({{ ((tested / total * 100) if total else 0)|round|int }}%)</td>
+            <td>{{ counts.pass }} ({{ ((counts.pass / total * 100) if total else 0)|round|int }}%)</td>
+            <td>{{ counts.fail }} ({{ ((counts.fail / total * 100) if total else 0)|round|int }}%)</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <div class="rinfo-header" style="margin-top: 32px;">{{ template.name }}</div>
+
+      <div class="rsignoff">
+        <div class="rdiv-line short"></div>
+        <div class="rsignoff-label">Tested By:</div>
+        <div class="rsignoff-sig">
+          {% if insp.inspector_signature and insp.inspector_signature.startswith('data:image') %}
+            <img src="{{ insp.inspector_signature }}" alt="Inspector signature">
+          {% else %}
+            <em>{{ insp.inspector_signature or insp.inspector_name }}</em>
+          {% endif %}
+        </div>
+        <div class="rsignoff-name"><strong>{{ insp.inspector_name }}</strong></div>
+        <div class="rsignoff-co">{{ company.name }}</div>
+        <div class="rsignoff-co">{{ company.address }}</div>
+        <div class="rsignoff-co">{{ company.city }}, {{ company.state }} {{ company.zip }}</div>
+      </div>
+    </div>
+    <div class="rpage-num">03</div>
+    <div class="rpage-bar bottom"></div>
+  </div>
+
+  <!-- ========== EXTINGUISHER ROSTER (if any) ========== -->
+  {% if extinguishers %}
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <div class="rinfo-header">FIRE EXTINGUISHERS AT THIS SITE</div>
+      <table class="rsummary-table">
+        <thead>
+          <tr><th>BARCODE</th><th>TYPE / SIZE</th><th>LOCATION</th><th>MFG / AGE</th><th>STATUS</th></tr>
+        </thead>
+        <tbody>
+          {% for x in extinguishers %}
+          <tr {% if x.exp_status == 'overdue' %}style="background:#FCE8EC;"{% elif x.exp_status == 'due-soon' %}style="background:#FFF1DD;"{% endif %}>
+            <td>{{ x.barcode or x.serial or '-' }}</td>
+            <td>{{ x.extinguisher_type or '-' }}{% if x.extinguisher_size %} &middot; {{ x.extinguisher_size }}{% endif %}</td>
+            <td>{{ x.location or '-' }}</td>
+            <td>{{ x.manufactured_date|fmtdate if x.manufactured_date else '-' }}<br>
+                <small>{{ x.manufactured_date|years_since }}</small></td>
+            <td>
+              {% if x.exp_status == 'overdue' %}<strong style="color:#C5283D;">HYDRO OVERDUE</strong>
+              {% elif x.exp_status == 'due-soon' %}<strong style="color:#D77A00;">Due soon</strong>
+              {% else %}<span style="color:#1F8B4C;">OK</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="font-size: 11px; color: #4A4A52; margin-top: 14px;">
+        <strong>Note:</strong> NFPA 10 requires hydrostatic testing of dry-chemical extinguishers
+        every 6 to 12 years and stored-pressure water/wet-chemical every 5 years. Spectofire flags
+        any extinguisher at or past the 7-yr mark from manufacture date.
+      </div>
+    </div>
+    <div class="rpage-num">04</div>
+    <div class="rpage-bar bottom"></div>
   </div>
   {% endif %}
+
+  <!-- ========== FIREWATCH ITEMS + LOGS ========== -->
+  {% if template.is_firewatch and rounds %}
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <h2 class="rdetail-title">Fire Watch Initial Inspection Questions</h2>
+      <div class="rdetail-block">
+        <div class="rdetail-section-head">Questions</div>
+        <table class="rdetail-table">
+          <tr>
+            <td class="lbl">Occupancy/Use of Building(s):</td>
+            <td>{{ answers.get('fw_reason', {}).get('result') or 'Commercial' }}</td>
+            <td class="lbl">Fire Watch Patrol Intervals:</td>
+            <td>{{ patrol_interval or '15 minutes' }}</td>
+          </tr>
+        </table>
+        <div class="rdetail-section-head">Result</div>
+        <div class="rdetail-result"><span class="result-dot pass"></span> Passed</div>
+      </div>
+      {% for r in rounds %}
+      <h2 class="rdetail-title">Fire Patrol Log {{ r.round_no }}</h2>
+      <div class="rdetail-block">
+        <div class="rdetail-section-head">Log</div>
+        <table class="rdetail-table">
+          <tr><td class="lbl">Date</td><td>{{ r.started_at[:10]|replace('-','/') if r.started_at else '-' }}</td></tr>
+          <tr><td class="lbl">Time</td><td>{{ r.started_at[11:13] }}{{ r.started_at[14:16] }}</td></tr>
+          <tr><td class="lbl">Watcher</td><td>{{ insp.inspector_name }}</td></tr>
+        </table>
+        <div class="rdetail-section-head">Result</div>
+        <div class="rdetail-result">
+          {% if r.all_clear %}<span class="result-dot pass"></span> Passed{% else %}<span class="result-dot fail"></span> Failed{% endif %}
+        </div>
+        <div class="rdetail-section-head">Notes</div>
+        <table class="rdetail-table">
+          <tr><td class="lbl">Number</td><td>{{ r.observations or '-' }}</td></tr>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="rpage-num">05</div>
+    <div class="rpage-bar bottom"></div>
+  </div>
+  {% endif %}
+
+  <!-- ========== STANDARD CHECKLIST DETAILS ========== -->
+  {% if not template.is_firewatch %}
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      {% for section in template.sections %}
+        {% for item in section['items'] %}
+          {% set ans = answers.get(item.id, {}) %}
+          <h2 class="rdetail-title">{{ section.title }} - {{ item.label }}</h2>
+          <div class="rdetail-block">
+            <div class="rdetail-section-head">Result</div>
+            <div class="rdetail-result">
+              {% if ans.get('result') == 'pass' %}<span class="result-dot pass"></span> Passed
+              {% elif ans.get('result') == 'fail' %}<span class="result-dot fail"></span> Failed
+              {% elif ans.get('result') == 'na' %}<span class="result-dot na"></span> N/A
+              {% else %}<span class="result-dot na"></span> Not answered{% endif %}
+            </div>
+            {% if ans.get('note') %}
+            <div class="rdetail-section-head">Notes</div>
+            <table class="rdetail-table"><tr><td>{{ ans.get('note') }}</td></tr></table>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    <div class="rpage-num">05</div>
+    <div class="rpage-bar bottom"></div>
+  </div>
+  {% endif %}
+
+  <!-- ========== PHOTOS ========== -->
+  {% if photos %}
+  <div class="rpage">
+    <div class="rpage-bar"></div>
+    <div class="rpage-body">
+      <div class="rinfo-header">PHOTOS ({{ photos|length }})</div>
+      <div class="rphoto-grid">
+        {% for p in photos %}
+        <div class="rphoto">
+          <img src="{{ url_for('uploaded_file', inspection_id=insp.id, filename=p.filename) }}" alt="{{ p.caption or '' }}">
+          {% if p.caption %}<div class="rphoto-caption">{{ p.caption }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="rpage-num">99</div>
+    <div class="rpage-bar bottom"></div>
+  </div>
+  {% endif %}
+
 </div>
 
-<div class="no-print" style="padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+<div class="no-print" style="padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 720px; margin: 0 auto;">
   <button onclick="window.print()" class="btn">Print / Save PDF</button>
   <form method="post" action="{{ url_for('email_report', inspection_id=insp.id) }}" style="display: contents;">
     <button type="submit" class="btn secondary">Email this report</button>
   </form>
   <a href="{{ url_for('dashboard') }}" class="btn ghost" style="grid-column: span 2;">Back to home</a>
-</div>
-
-<div class="no-print" style="text-align: center; color: var(--ink-3); font-size: 11px; padding: 0 16px 24px;">
-  Report ID #{{ insp.id }} - IGH Health, Fire &amp; Safety - ighsafety.com
 </div>
 {% endblock %}

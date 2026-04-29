@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ site.customer_name }} · IGH fireNspec{% endblock %}
+{% block title %}{{ site.customer_name }} - Spectofire{% endblock %}
 {% block topbar_title %}{{ site.customer_name }}{% endblock %}
 {% block content %}
 <div class="pagehead">
   <h2>{{ site.site_name }}</h2>
   <p>
     {% if site.address %}{{ site.address }}<br>{% endif %}
-    {% if site.contact_name %}{{ site.contact_name }}{% if site.contact_phone %} · <a href="tel:{{ site.contact_phone }}">{{ site.contact_phone }}</a>{% endif %}{% endif %}
+    {% if site.contact_name %}{{ site.contact_name }}{% if site.contact_phone %} &middot; <a href="tel:{{ site.contact_phone }}">{{ site.contact_phone }}</a>{% endif %}{% endif %}
   </p>
   {% if site.notes %}<p style="margin-top:6px; font-style: italic;">{{ site.notes }}</p>{% endif %}
 </div>
@@ -19,25 +19,31 @@
 {% if devices %}
 <div class="card">
   {% for d in devices %}
-  <div class="row">
+  <a class="row clickable"
+     href="{% if d.device_type == 'extinguisher' %}{{ url_for('device_detail', device_id=d.id) }}{% else %}#{% endif %}">
     <div class="icon">
-      {%- if d.device_type == 'extinguisher' %}🧯
-      {%- elif d.device_type == 'fire_alarm_panel' %}🚨
-      {%- elif d.device_type == 'kitchen_suppression' %}🍳
-      {%- elif d.device_type == 'emergency_light' %}💡
-      {%- else %}🔧{% endif -%}
+      {%- if d.device_type == 'extinguisher' %}FE
+      {%- elif d.device_type == 'fire_alarm_panel' %}FA
+      {%- elif d.device_type == 'kitchen_suppression' %}KS
+      {%- elif d.device_type == 'emergency_light' %}EL
+      {%- else %}DV{% endif -%}
     </div>
     <div class="meta">
       <div class="title">{{ d.barcode or d.serial or d.device_type }}</div>
-      <div class="sub">{{ d.model or d.device_type }} · {{ d.location or '—' }}</div>
+      <div class="sub">
+        {% if d.extinguisher_type %}{{ d.extinguisher_type }}{% if d.extinguisher_size %} &middot; {{ d.extinguisher_size }}{% endif %}
+        {% else %}{{ d.model or d.device_type }}{% endif %}
+        &middot; {{ d.location or '-' }}
+      </div>
       <div class="sub" style="margin-top:2px;">
-        Last: {{ d.last_inspected|fmtdate }} · Next: {{ d.next_due|fmtdate }}
-        {% set du = d.next_due|days_until %}
-        {% if du is not none and du < 0 %}<span class="pill overdue" style="margin-left:6px;">Overdue</span>
-        {% elif du is not none and du <= 30 %}<span class="pill due-soon" style="margin-left:6px;">Due soon</span>{% endif %}
+        Last: {{ d.last_inspected|fmtdate }} &middot; Next: {{ d.next_due|fmtdate }}
       </div>
     </div>
-  </div>
+    {% if d.exp_status == 'overdue' %}<span class="pill overdue">Hydro overdue</span>
+    {% elif d.exp_status == 'due-soon' %}<span class="pill due-soon">Hydro due soon</span>
+    {% endif %}
+    <span class="chev">&rsaquo;</span>
+  </a>
   {% endfor %}
 </div>
 {% else %}
@@ -45,7 +51,7 @@
 {% endif %}
 
 <details style="margin: 6px 16px 16px;">
-  <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-red); cursor: pointer;">+ Add device</summary>
+  <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-orange); cursor: pointer;">+ Add device</summary>
   <form method="post" action="{{ url_for('new_device', site_id=site.id) }}" style="padding-top: 6px;">
     <div class="card" style="padding: 6px 0;">
       <div class="field">
@@ -59,7 +65,7 @@
           <option value="exit_sign">Exit sign</option>
         </select>
       </div>
-      <div class="field"><label>Barcode / asset tag</label><input type="text" name="barcode" placeholder="IGH-FE-…"></div>
+      <div class="field"><label>Barcode / asset tag</label><input type="text" name="barcode" placeholder="IGH-FE-..."></div>
       <div class="field"><label>Model</label><input type="text" name="model"></div>
       <div class="field"><label>Serial</label><input type="text" name="serial"></div>
       <div class="field"><label>Location</label><input type="text" name="location"></div>
@@ -78,10 +84,10 @@
     <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
     <div class="meta">
       <div class="title">{{ TEMPLATES[i.template_slug].name }}</div>
-      <div class="sub">{{ i.inspector_name }} · {{ (i.completed_at or i.started_at)|fmtdate }}</div>
+      <div class="sub">{{ i.inspector_name }} &middot; {{ (i.completed_at or i.started_at)|fmtdate }}</div>
     </div>
     <span class="pill {{ i.status }}">{{ i.status.replace('_',' ') }}</span>
-    <span class="chev">›</span>
+    <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}
 </div>
