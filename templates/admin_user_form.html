@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if user else 'New' }} User · IGH fireNspec{% endblock %}
+{% block topbar_title %}{{ 'Edit' if user else 'New' }} User{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>{{ 'Edit' if user else 'Add' }} user account</h2></div>
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<form method="post">
+  <div class="card" style="padding-top: 6px; padding-bottom: 6px;">
+    <div class="field"><label>Full name</label>
+      <input type="text" name="full_name" required value="{{ user.full_name if user else '' }}">
+    </div>
+    {% if not user %}
+    <div class="field"><label>Username</label>
+      <input type="text" name="username" required autocomplete="off">
+    </div>
+    {% endif %}
+    <div class="field"><label>{{ 'New password (leave blank to keep)' if user else 'Password' }}</label>
+      <input type="password" name="password" {{ 'required' if not user else '' }} autocomplete="new-password">
+    </div>
+    <div class="field"><label>Role</label>
+      <select name="role">
+        <option value="inspector" {% if user and user.role == 'inspector' %}selected{% endif %}>Inspector</option>
+        <option value="admin" {% if user and user.role == 'admin' %}selected{% endif %}>Admin</option>
+      </select>
+    </div>
+    {% if user %}
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="active" value="1" {% if user.active %}checked{% endif %} style="width:22px;height:22px;">
+        Active account
+      </label>
+    </div>
+    {% endif %}
+  </div>
+  <div style="padding: 16px; display: flex; gap: 10px;">
+    <button type="submit" class="btn full">{{ 'Save changes' if user else 'Create user' }}</button>
+    <a href="{{ url_for('admin_users') }}" class="btn secondary full">Cancel</a>
+  </div>
+</form>
+{% endblock %}

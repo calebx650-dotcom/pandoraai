@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Deficiencies · IGH fireNspec{% endblock %}
+{% block topbar_title %}Open Issues{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <h2>Deficiencies</h2>
+</div>
+
+<div style="padding: 0 16px 12px; display:flex; gap:8px; flex-wrap:wrap;">
+  <a href="{{ url_for('deficiencies_list') }}?status=open" class="btn {% if status_filter=='open' %}{% else %}secondary{% endif %}">Open</a>
+  <a href="{{ url_for('deficiencies_list') }}?status=in_progress" class="btn {% if status_filter=='in_progress' %}{% else %}secondary{% endif %}">In progress</a>
+  <a href="{{ url_for('deficiencies_list') }}?status=resolved" class="btn {% if status_filter=='resolved' %}{% else %}secondary{% endif %}">Resolved</a>
+  <a href="{{ url_for('deficiencies_list') }}?status=all" class="btn {% if status_filter=='all' %}{% else %}secondary{% endif %}">All</a>
+</div>
+
+{% if deficiencies %}
+<div class="card">
+  {% for d in deficiencies %}
+  <div class="item">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <span class="pill {% if d.severity=='critical' %}overdue{% elif d.severity=='major' %}due-soon{% else %}na{% endif %}" style="margin-right:6px;">
+          {{ d.severity|title }}
+        </span>
+        <span style="font-size:12px; color:var(--ink-3);">{{ d.customer_name }} - {{ d.site_name }}</span>
+      </div>
+      <span style="font-size:11px; color:var(--ink-3);">{{ d.created_at|fmtdate }}</span>
+    </div>
+    <div style="margin-top:6px; font-weight:600;">{{ d.description }}</div>
+    {% if d.item_label %}<div class="sub" style="margin-top:2px;">Item: {{ d.item_label }}</div>{% endif %}
+    {% if d.assigned_to %}<div class="sub">Assigned: {{ d.assigned_to }}</div>{% endif %}
+    {% if d.due_date %}<div class="sub">Due: {{ d.due_date|fmtdate }}</div>{% endif %}
+    {% if d.resolution_notes %}<div class="sub" style="color:var(--pass);">Resolution: {{ d.resolution_notes }}</div>{% endif %}
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+      <a href="{{ url_for('report', inspection_id=d.inspection_id) }}" class="btn secondary" style="font-size:12px; padding:5px 10px;">View report</a>
+      {% if d.status != 'resolved' %}
+      <form method="post" action="{{ url_for('resolve_deficiency', def_id=d.id) }}" style="display:flex; gap:6px; flex:1; min-width:200px;">
+        <input type="text" name="resolution_notes" placeholder="Resolution notes..." style="flex:1; padding:6px 10px; border:1.5px solid var(--line); border-radius:8px; font-size:13px;">
+        <button type="submit" class="btn" style="font-size:12px; padding:6px 12px;">Resolve</button>
+      </form>
+      {% endif %}
+      {% if current_role == 'admin' %}
+      <form method="post" action="{{ url_for('delete_deficiency', def_id=d.id) }}">
+        <button type="submit" class="btn secondary" style="font-size:12px; padding:5px 10px; color:var(--fail);"
+                onclick="return confirm('Delete this deficiency?')">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">No {{ status_filter }} deficiencies.</div></div>
+{% endif %}
+{% endblock %}

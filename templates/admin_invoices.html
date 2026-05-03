@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Invoices · IGH fireNspec{% endblock %}
+{% block topbar_title %}Invoices{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>Invoices</h2></div>
+
+<div style="padding: 0 16px 8px; display:flex; gap:8px;">
+  <a href="{{ url_for('admin_quickbooks') }}" class="btn secondary">QuickBooks sync</a>
+</div>
+
+<details style="margin: 0 16px 16px;">
+  <summary style="padding: 12px 0; font-weight:600; color:var(--igh-orange); cursor:pointer;">+ Create invoice</summary>
+  <form method="post" action="{{ url_for('create_invoice') }}" style="padding-top:6px;">
+    <div class="card" style="padding:6px 0;">
+      <div class="field">
+        <label>Site</label>
+        <select name="site_id" required id="inv-site">
+          <option value="">-- select site --</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Amount ($)</label>
+        <input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <input type="text" name="description" placeholder="Annual extinguisher inspection – 5 units">
+      </div>
+    </div>
+    <button type="submit" class="btn" style="margin-top:8px;">Create draft</button>
+  </form>
+</details>
+
+<script>
+fetch('/admin/export/sites.csv').then(r => r.text()).then(csv => {
+  const lines = csv.trim().split('\n').slice(1);
+  const sel = document.getElementById('inv-site');
+  lines.forEach(line => {
+    const cols = line.split(',');
+    if (cols.length >= 3) {
+      const opt = document.createElement('option');
+      opt.value = cols[0];
+      opt.textContent = `${cols[1]} — ${cols[2]}`;
+      sel.appendChild(opt);
+    }
+  });
+});
+</script>
+
+{% macro status_pill(s) %}
+  <span class="pill {% if s=='paid' %}pass{% elif s=='sent' %}due-soon{% else %}na{% endif %}">{{ s|title }}</span>
+{% endmacro %}
+
+{% if invoices %}
+<div class="card">
+  {% for inv in invoices %}
+  <div class="item">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        {{ status_pill(inv.status) }}
+        <span style="margin-left:8px; font-weight:600;">${{ '%.2f'|format(inv.amount_cents / 100) }}</span>
+      </div>
+      <span style="font-size:11px; color:var(--ink-3);">{{ inv.created_at|fmtdate }}</span>
+    </div>
+    <div style="margin-top:4px; font-size:13px; color:var(--ink-2);">{{ inv.customer_name }} — {{ inv.site_name }}</div>
+    {% if inv.description %}<div class="sub">{{ inv.description }}</div>{% endif %}
+    {% if inv.qb_invoice_id %}<div class="sub" style="color:var(--pass);">QB #{{ inv.qb_invoice_id }}</div>{% endif %}
+    <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+      {% if inv.status == 'draft' %}
+      <form method="post" action="{{ url_for('invoice_status', inv_id=inv.id) }}">
+        <input type="hidden" name="status" value="sent">
+        <button type="submit" class="btn secondary" style="font-size:12px; padding:5px 10px;">Mark sent</button>
+      </form>
+      {% endif %}
+      {% if inv.status in ('draft','sent') %}
+      <form method="post" action="{{ url_for('invoice_status', inv_id=inv.id) }}">
+        <input type="hidden" name="status" value="paid">
+        <button type="submit" class="btn" style="font-size:12px; padding:5px 10px;">Mark paid</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">No invoices yet.</div></div>
+{% endif %}
+{% endblock %}

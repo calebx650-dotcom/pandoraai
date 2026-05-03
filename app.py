@@ -7,6 +7,7 @@ Run:
 import os
 import re
 import io
+import csv
 import json
 import secrets
 from datetime import datetime, timedelta
@@ -196,10 +197,25 @@ def dashboard():
             hydro_due.append(d)
     hydro_due.sort(key=lambda x: x.get("manufactured_date") or "")
 
+    stats = {}
+    stats["total_sites"] = conn.execute("SELECT COUNT(*) FROM sites").fetchone()[0]
+    stats["open_deficiencies"] = conn.execute(
+        "SELECT COUNT(*) FROM deficiencies WHERE status='open'").fetchone()[0]
+    stats["open_inspections"] = conn.execute(
+        "SELECT COUNT(*) FROM inspections WHERE status='in_progress'").fetchone()[0]
+    stats["unpaid_invoices"] = conn.execute(
+        "SELECT COUNT(*) FROM invoices WHERE status IN ('draft','sent')").fetchone()[0]
+    month_end = (datetime.utcnow().date() + timedelta(days=30)).isoformat()
+    scheduled_due = conn.execute("""
+        SELECT ss.*, s.customer_name, s.site_name
+        FROM site_schedules ss JOIN sites s ON s.id = ss.site_id
+        WHERE ss.next_due IS NOT NULL AND ss.next_due <= ?
+        ORDER BY ss.next_due ASC
+    """, (month_end,)).fetchall()
     conn.close()
     return render_template("dashboard.html",
         in_progress=in_progress, recent=recent, overdue=overdue, upcoming=upcoming,
-        hydro_due=hydro_due)
+        hydro_due=hydro_due, stats=stats, scheduled_due=scheduled_due)
 
 
 # ---------- sites ----------
@@ -232,11 +248,12 @@ def new_site():
         f = request.form
         conn = get_conn()
         cur = conn.execute("""
-            INSERT INTO sites (customer_name, site_name, address, contact_name, contact_phone, notes, created_at)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO sites (customer_name, site_name, address, contact_name, contact_phone, contact_email, notes, created_at)
+            VALUES (?,?,?,?,?,?,?,?)
         """, (f.get("customer_name", "").strip(), f.get("site_name", "").strip(),
               f.get("address", "").strip(), f.get("contact_name", "").strip(),
-              f.get("contact_phone", "").strip(), f.get("notes", "").strip(),
+              f.get("contact_phone", "").strip(), f.get("contact_email", "").strip(),
+              f.get("notes", "").strip(),
               datetime.utcnow().isoformat(timespec="seconds")))
         site_id = cur.lastrowid
         conn.commit(); conn.close()
@@ -275,6 +292,26 @@ def site_detail(site_id):
     conn.close()
     return render_template("site_detail.html", site=site,
                            devices=devices_with_status, inspections=inspections)
+
+
+@app.route("/sites/<int:site_id>/edit", methods=["POST"])
+@login_required
+def edit_site(site_id):
+    f = request.form
+    conn = get_conn()
+    conn.execute("""
+        UPDATE sites SET customer_name=?, site_name=?, address=?, contact_name=?,
+            contact_phone=?, contact_email=?, notes=?
+        WHERE id=?
+    """, (f.get("customer_name", "").strip(), f.get("site_name", "").strip(),
+          f.get("address", "").strip(), f.get("contact_name", "").strip(),
+          f.get("contact_phone", "").strip(), f.get("contact_email", "").strip(),
+          f.get("notes", "").strip(), site_id))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "site_edited", "site", site_id,
+              f.get("customer_name", "").strip())
+    flash("Site updated.", "success")
+    return redirect(url_for("site_detail", site_id=site_id))
 
 
 @app.route("/sites/<int:site_id>/devices/new", methods=["POST"])
@@ -603,6 +640,9 @@ def report(inspection_id):
         "SELECT * FROM devices WHERE site_id = ? AND device_type = 'extinguisher' ORDER BY location",
         (insp["site_id"],)
     ).fetchall()
+    report_deficiencies = conn2.execute("""
+        SELECT * FROM deficiencies WHERE inspection_id = ? ORDER BY severity, created_at
+    """, (inspection_id,)).fetchall()
     conn2.close()
     extinguishers = []
     for sd in site_devices:
@@ -616,7 +656,8 @@ def report(inspection_id):
                            answers=answers, counts=counts, rounds=rounds, photos=photos,
                            mailto=mailto, company=COMPANY,
                            occupancy="Commercial", patrol_interval="15 minutes",
-                           extinguishers=extinguishers)
+                           extinguishers=extinguishers,
+                           report_deficiencies=report_deficiencies)
 
 
 @app.route("/reports")
@@ -878,6 +919,476 @@ def sw():
 @app.route("/static/uploads/<int:inspection_id>/<path:filename>")
 def uploaded_file(inspection_id, filename):
     return send_from_directory(os.path.join(UPLOAD_DIR, str(inspection_id)), filename)
+
+
+# ---------- admin: user management ----------
+@app.route("/admin/users")
+@login_required
+@admin_required
+def admin_users():
+    conn = get_conn()
+    users = conn.execute("SELECT * FROM users ORDER BY full_name").fetchall()
+    conn.close()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/users/new", methods=["GET", "POST"])
+@login_required
+@admin_required
+def admin_user_new():
+    from werkzeug.security import generate_password_hash
+    error = None
+    if request.method == "POST":
+        f = request.form
+        username = f.get("username", "").strip().lower()
+        full_name = f.get("full_name", "").strip()
+        password = f.get("password", "")
+        role = f.get("role", "inspector")
+        if not username or not full_name or not password:
+            error = "All fields required."
+        else:
+            try:
+                conn = get_conn()
+                conn.execute(
+                    "INSERT INTO users (username, password_hash, full_name, role) VALUES (?,?,?,?)",
+                    (username, generate_password_hash(password), full_name, role)
+                )
+                conn.commit(); conn.close()
+                log_event(session["user_id"], "user_created", "user", None, full_name)
+                flash(f"User {full_name} created.", "success")
+                return redirect(url_for("admin_users"))
+            except Exception as e:
+                error = f"Username already taken or error: {e}"
+    return render_template("admin_user_form.html", error=error, user=None)
+
+
+@app.route("/admin/users/<int:uid>/edit", methods=["GET", "POST"])
+@login_required
+@admin_required
+def admin_user_edit(uid):
+    from werkzeug.security import generate_password_hash
+    conn = get_conn()
+    user = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    conn.close()
+    if not user:
+        abort(404)
+    error = None
+    if request.method == "POST":
+        f = request.form
+        full_name = f.get("full_name", "").strip()
+        role = f.get("role", "inspector")
+        active = 1 if f.get("active") else 0
+        new_pw = f.get("password", "").strip()
+        conn = get_conn()
+        if new_pw:
+            conn.execute("UPDATE users SET full_name=?, role=?, active=?, password_hash=? WHERE id=?",
+                         (full_name, role, active, generate_password_hash(new_pw), uid))
+        else:
+            conn.execute("UPDATE users SET full_name=?, role=?, active=? WHERE id=?",
+                         (full_name, role, active, uid))
+        conn.commit(); conn.close()
+        log_event(session["user_id"], "user_edited", "user", uid, full_name)
+        flash("User updated.", "success")
+        return redirect(url_for("admin_users"))
+    return render_template("admin_user_form.html", error=error, user=dict(user))
+
+
+# ---------- deficiencies ----------
+@app.route("/deficiencies")
+@login_required
+def deficiencies_list():
+    conn = get_conn()
+    status_filter = request.args.get("status", "open")
+    if status_filter == "all":
+        rows = conn.execute("""
+            SELECT d.*, s.customer_name, s.site_name, u.full_name AS creator_name,
+                   i.template_slug
+            FROM deficiencies d
+            JOIN sites s ON s.id = d.site_id
+            LEFT JOIN users u ON u.id = d.created_by
+            LEFT JOIN inspections i ON i.id = d.inspection_id
+            ORDER BY d.created_at DESC
+        """).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT d.*, s.customer_name, s.site_name, u.full_name AS creator_name,
+                   i.template_slug
+            FROM deficiencies d
+            JOIN sites s ON s.id = d.site_id
+            LEFT JOIN users u ON u.id = d.created_by
+            LEFT JOIN inspections i ON i.id = d.inspection_id
+            WHERE d.status = ?
+            ORDER BY CASE d.severity WHEN 'critical' THEN 1 WHEN 'major' THEN 2 ELSE 3 END,
+                     d.created_at DESC
+        """, (status_filter,)).fetchall()
+    conn.close()
+    return render_template("admin_deficiencies.html", deficiencies=rows, status_filter=status_filter)
+
+
+@app.route("/inspections/<int:inspection_id>/deficiencies/new", methods=["GET", "POST"])
+@login_required
+def new_deficiency(inspection_id):
+    conn = get_conn()
+    insp = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, s.contact_email
+        FROM inspections i JOIN sites s ON s.id = i.site_id
+        WHERE i.id = ?
+    """, (inspection_id,)).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    if request.method == "POST":
+        f = request.form
+        desc = f.get("description", "").strip()
+        if not desc:
+            conn.close()
+            flash("Description required.", "error")
+            return redirect(request.url)
+        item_id = f.get("item_id", "").strip() or None
+        item_label = f.get("item_label", "").strip() or None
+        severity = f.get("severity", "major")
+        assigned_to = f.get("assigned_to", "").strip() or None
+        due_date = f.get("due_date", "").strip() or None
+        cur = conn.execute("""
+            INSERT INTO deficiencies (inspection_id, site_id, item_id, item_label, description,
+                severity, status, assigned_to, due_date, created_by, created_at)
+            VALUES (?,?,?,?,?,?,'open',?,?,?,?)
+        """, (inspection_id, insp["site_id"], item_id, item_label, desc,
+              severity, assigned_to, due_date, session["user_id"],
+              datetime.utcnow().isoformat(timespec="seconds")))
+        def_id = cur.lastrowid
+        conn.commit()
+        log_event(session["user_id"], "deficiency_created", "inspection", inspection_id,
+                  f"{severity}: {desc[:60]}")
+        # Email site contact if they have an email
+        contact_email = insp["contact_email"]
+        if contact_email:
+            from mailer import send_report_email
+            html = render_template("email_deficiency.html", insp=insp, desc=desc,
+                                   severity=severity, due_date=due_date)
+            send_report_email(contact_email,
+                              f"IGH Deficiency Notice - {insp['customer_name']}",
+                              html)
+        conn.close()
+        flash("Deficiency recorded.", "success")
+        return redirect(url_for("inspection", inspection_id=inspection_id))
+    item_id = request.args.get("item_id", "")
+    item_label = request.args.get("item_label", "")
+    conn.close()
+    return render_template("deficiency_form.html", insp=dict(insp), item_id=item_id,
+                           item_label=item_label)
+
+
+@app.route("/deficiencies/<int:def_id>/resolve", methods=["POST"])
+@login_required
+def resolve_deficiency(def_id):
+    notes = request.form.get("resolution_notes", "").strip()
+    conn = get_conn()
+    d = conn.execute("SELECT * FROM deficiencies WHERE id=?", (def_id,)).fetchone()
+    if not d:
+        conn.close(); abort(404)
+    conn.execute("""
+        UPDATE deficiencies SET status='resolved', resolution_notes=?, resolved_at=? WHERE id=?
+    """, (notes, datetime.utcnow().isoformat(timespec="seconds"), def_id))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "deficiency_resolved", "inspection", d["inspection_id"],
+              f"#{def_id}")
+    flash("Deficiency marked resolved.", "success")
+    return redirect(request.referrer or url_for("deficiencies_list"))
+
+
+@app.route("/deficiencies/<int:def_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def delete_deficiency(def_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM deficiencies WHERE id=?", (def_id,))
+    conn.commit(); conn.close()
+    flash("Deficiency deleted.", "success")
+    return redirect(url_for("deficiencies_list"))
+
+
+# ---------- inspection schedules ----------
+@app.route("/admin/schedules")
+@login_required
+@admin_required
+def admin_schedules():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT ss.*, s.customer_name, s.site_name
+        FROM site_schedules ss JOIN sites s ON s.id = ss.site_id
+        ORDER BY ss.next_due ASC
+    """).fetchall()
+    sites_rows = conn.execute("SELECT id, customer_name, site_name FROM sites ORDER BY customer_name").fetchall()
+    conn.close()
+    return render_template("admin_schedules.html", schedules=rows, sites=sites_rows,
+                           TEMPLATES=TEMPLATES)
+
+
+@app.route("/admin/schedules/new", methods=["POST"])
+@login_required
+@admin_required
+def admin_schedule_new():
+    f = request.form
+    site_id = int(f.get("site_id"))
+    slug = f.get("template_slug")
+    freq = int(f.get("frequency_months", 12))
+    next_due = f.get("next_due") or None
+    notes = f.get("notes", "").strip() or None
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO site_schedules (site_id, template_slug, frequency_months, next_due, notes, created_at)
+        VALUES (?,?,?,?,?,?)
+    """, (site_id, slug, freq, next_due, notes,
+          datetime.utcnow().isoformat(timespec="seconds")))
+    conn.commit(); conn.close()
+    flash("Schedule added.", "success")
+    return redirect(url_for("admin_schedules"))
+
+
+@app.route("/admin/schedules/<int:sched_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_schedule_delete(sched_id):
+    conn = get_conn()
+    conn.execute("DELETE FROM site_schedules WHERE id=?", (sched_id,))
+    conn.commit(); conn.close()
+    flash("Schedule removed.", "success")
+    return redirect(url_for("admin_schedules"))
+
+
+# ---------- customer portal ----------
+@app.route("/portal/<token>")
+def customer_portal(token):
+    conn = get_conn()
+    site = conn.execute("SELECT * FROM sites WHERE portal_token=?", (token,)).fetchone()
+    if not site:
+        conn.close(); abort(404)
+    inspections = conn.execute("""
+        SELECT i.*, u.full_name AS inspector_name
+        FROM inspections i JOIN users u ON u.id = i.inspector_id
+        WHERE i.site_id = ? AND i.status = 'completed'
+        ORDER BY i.completed_at DESC
+    """, (site["id"],)).fetchall()
+    deficiencies = conn.execute("""
+        SELECT * FROM deficiencies WHERE site_id=? ORDER BY created_at DESC
+    """, (site["id"],)).fetchall()
+    conn.close()
+    return render_template("portal.html", site=site, inspections=inspections,
+                           deficiencies=deficiencies, TEMPLATES=TEMPLATES)
+
+
+@app.route("/sites/<int:site_id>/portal-token", methods=["POST"])
+@login_required
+@admin_required
+def regen_portal_token(site_id):
+    token = secrets.token_urlsafe(16)
+    conn = get_conn()
+    conn.execute("UPDATE sites SET portal_token=? WHERE id=?", (token, site_id))
+    conn.commit(); conn.close()
+    flash("Portal link generated.", "success")
+    return redirect(url_for("site_detail", site_id=site_id))
+
+
+# ---------- CSV exports ----------
+@app.route("/admin/export/sites.csv")
+@login_required
+@admin_required
+def export_sites_csv():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM sites ORDER BY customer_name").fetchall()
+    conn.close()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id","customer_name","site_name","address","contact_name",
+                "contact_phone","contact_email","notes","created_at"])
+    for r in rows:
+        w.writerow([r["id"], r["customer_name"], r["site_name"], r["address"],
+                    r["contact_name"], r["contact_phone"], r["contact_email"],
+                    r["notes"], r["created_at"]])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=sites.csv"})
+
+
+@app.route("/admin/export/inspections.csv")
+@login_required
+@admin_required
+def export_inspections_csv():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT i.id, s.customer_name, s.site_name, i.template_slug, i.status,
+               u.full_name AS inspector, i.started_at, i.completed_at
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        ORDER BY i.started_at DESC
+    """).fetchall()
+    conn.close()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id","customer","site","template","status","inspector",
+                "started_at","completed_at"])
+    for r in rows:
+        w.writerow([r["id"], r["customer_name"], r["site_name"], r["template_slug"],
+                    r["status"], r["inspector"], r["started_at"], r["completed_at"]])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=inspections.csv"})
+
+
+@app.route("/admin/export/deficiencies.csv")
+@login_required
+@admin_required
+def export_deficiencies_csv():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT d.id, s.customer_name, s.site_name, d.item_label, d.description,
+               d.severity, d.status, d.assigned_to, d.due_date,
+               d.resolution_notes, d.created_at, d.resolved_at
+        FROM deficiencies d JOIN sites s ON s.id = d.site_id
+        ORDER BY d.created_at DESC
+    """).fetchall()
+    conn.close()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id","customer","site","item","description","severity","status",
+                "assigned_to","due_date","resolution_notes","created_at","resolved_at"])
+    for r in rows:
+        w.writerow([r["id"], r["customer_name"], r["site_name"], r["item_label"],
+                    r["description"], r["severity"], r["status"], r["assigned_to"],
+                    r["due_date"], r["resolution_notes"], r["created_at"], r["resolved_at"]])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=deficiencies.csv"})
+
+
+# ---------- invoices ----------
+@app.route("/admin/invoices")
+@login_required
+@admin_required
+def admin_invoices():
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT inv.*, s.customer_name, s.site_name
+        FROM invoices inv JOIN sites s ON s.id = inv.site_id
+        ORDER BY inv.created_at DESC
+    """).fetchall()
+    conn.close()
+    return render_template("admin_invoices.html", invoices=rows)
+
+
+@app.route("/admin/invoices/create", methods=["POST"])
+@login_required
+@admin_required
+def create_invoice():
+    f = request.form
+    inspection_id = f.get("inspection_id") or None
+    site_id = int(f.get("site_id"))
+    amount_str = f.get("amount", "0").replace("$", "").replace(",", "").strip()
+    try:
+        amount_cents = int(float(amount_str) * 100)
+    except Exception:
+        amount_cents = 0
+    description = f.get("description", "").strip()
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO invoices (inspection_id, site_id, amount_cents, description, status, created_at)
+        VALUES (?,?,?,?,'draft',?)
+    """, (inspection_id, site_id, amount_cents, description,
+          datetime.utcnow().isoformat(timespec="seconds")))
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "invoice_created", "site", site_id, description[:60])
+    flash("Invoice created as draft.", "success")
+    return redirect(url_for("admin_invoices"))
+
+
+@app.route("/admin/invoices/<int:inv_id>/status", methods=["POST"])
+@login_required
+@admin_required
+def invoice_status(inv_id):
+    new_status = request.form.get("status")
+    if new_status not in ("draft", "sent", "paid"):
+        abort(400)
+    conn = get_conn()
+    extra = ""
+    vals = [new_status]
+    if new_status == "paid":
+        extra = ", paid_at=?"
+        vals.append(datetime.utcnow().isoformat(timespec="seconds"))
+    elif new_status == "sent":
+        extra = ", sent_at=?"
+        vals.append(datetime.utcnow().isoformat(timespec="seconds"))
+    vals.append(inv_id)
+    conn.execute(f"UPDATE invoices SET status=?{extra} WHERE id=?", vals)
+    conn.commit(); conn.close()
+    flash(f"Invoice marked {new_status}.", "success")
+    return redirect(url_for("admin_invoices"))
+
+
+# ---------- QuickBooks (stub / groundwork) ----------
+@app.route("/admin/quickbooks")
+@login_required
+@admin_required
+def admin_quickbooks():
+    conn = get_conn()
+    cfg = conn.execute("SELECT * FROM quickbooks_config WHERE id=1").fetchone()
+    conn.close()
+    return render_template("admin_quickbooks.html", cfg=cfg)
+
+
+@app.route("/admin/quickbooks/connect")
+@login_required
+@admin_required
+def qb_connect():
+    flash("QuickBooks OAuth2 integration coming soon. Your invoice data is ready to sync once connected.", "success")
+    return redirect(url_for("admin_quickbooks"))
+
+
+@app.route("/admin/quickbooks/disconnect", methods=["POST"])
+@login_required
+@admin_required
+def qb_disconnect():
+    conn = get_conn()
+    conn.execute("DELETE FROM quickbooks_config WHERE id=1")
+    conn.commit(); conn.close()
+    flash("QuickBooks disconnected.", "success")
+    return redirect(url_for("admin_quickbooks"))
+
+
+# ---------- bulk device import ----------
+@app.route("/sites/<int:site_id>/devices/import", methods=["POST"])
+@login_required
+def import_devices(site_id):
+    conn = get_conn()
+    site = conn.execute("SELECT id FROM sites WHERE id=?", (site_id,)).fetchone()
+    if not site:
+        conn.close(); abort(404)
+    f = request.files.get("csvfile")
+    if not f:
+        flash("No file uploaded.", "error")
+        return redirect(url_for("site_detail", site_id=site_id))
+    try:
+        text = f.read().decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        count = 0
+        for row in reader:
+            device_type = (row.get("device_type") or "extinguisher").strip()
+            barcode = (row.get("barcode") or "").strip() or None
+            model = (row.get("model") or "").strip() or None
+            serial = (row.get("serial") or "").strip() or None
+            location = (row.get("location") or "").strip() or None
+            conn.execute("""
+                INSERT INTO devices (site_id, device_type, barcode, model, serial, location)
+                VALUES (?,?,?,?,?,?)
+            """, (site_id, device_type, barcode, model, serial, location))
+            count += 1
+        conn.commit()
+        log_event(session["user_id"], "devices_imported", "site", site_id, f"{count} devices")
+        flash(f"{count} devices imported.", "success")
+    except Exception as e:
+        flash(f"Import failed: {e}", "error")
+    conn.close()
+    return redirect(url_for("site_detail", site_id=site_id))
 
 
 # ---------- entry ----------

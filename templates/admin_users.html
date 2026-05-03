@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Users · IGH fireNspec{% endblock %}
+{% block topbar_title %}Users{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <h2>User accounts</h2>
+</div>
+<div style="padding: 0 16px 12px;">
+  <a href="{{ url_for('admin_user_new') }}" class="btn">+ New user</a>
+</div>
+<div class="card">
+  {% for u in users %}
+  <div class="row">
+    <div class="icon">{{ u.full_name[0].upper() }}</div>
+    <div class="meta">
+      <div class="title">{{ u.full_name }}</div>
+      <div class="sub">{{ u.username }} &middot; {{ u.role }}{% if not u.active %} &middot; <span style="color:var(--fail)">Inactive</span>{% endif %}</div>
+    </div>
+    <a href="{{ url_for('admin_user_edit', uid=u.id) }}" class="btn secondary" style="font-size:13px;">Edit</a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card-title" style="margin-top:16px;">Admin tools</div>
+<div class="card">
+  <a class="row clickable" href="{{ url_for('admin_schedules') }}">
+    <div class="meta"><div class="title">Inspection schedules</div><div class="sub">Manage recurring inspection due dates per site</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_invoices') }}">
+    <div class="meta"><div class="title">Invoices</div><div class="sub">Draft and track service invoices</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_quickbooks') }}">
+    <div class="meta"><div class="title">QuickBooks</div><div class="sub">Connect to QuickBooks Online for invoice sync</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_events') }}">
+    <div class="meta"><div class="title">Activity log</div><div class="sub">Last 200 system events</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('export_sites_csv') }}">
+    <div class="meta"><div class="title">Export sites CSV</div><div class="sub">Download all customer sites</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('export_inspections_csv') }}">
+    <div class="meta"><div class="title">Export inspections CSV</div><div class="sub">Download all inspection records</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('export_deficiencies_csv') }}">
+    <div class="meta"><div class="title">Export deficiencies CSV</div><div class="sub">Download all open and resolved issues</div></div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+</div>
+{% endblock %}

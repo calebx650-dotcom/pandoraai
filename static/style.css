@@ -598,6 +598,38 @@ form { margin: 0; }
   margin-top: 4px;
 }
 
+/* STATS ROW */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.stat-card {
+  background: var(--card);
+  border-radius: var(--radius-sm);
+  padding: 12px 8px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  display: block;
+}
+.stat-card:hover { text-decoration: none; }
+.stat-card.warn { background: var(--warn-bg); }
+.stat-num {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--igh-navy);
+  line-height: 1;
+}
+.stat-card.warn .stat-num { color: var(--warn); }
+.stat-lbl {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 4px;
+  line-height: 1.2;
+}
+
 /* PRINT MODE - hide app chrome */
 @media print {
   .topbar, .tabbar, .fab, .no-print, .btn { display: none !important; }

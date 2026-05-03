@@ -41,6 +41,7 @@
     {% if current_role == 'admin' %}
     <a href="{{ url_for('admin_events') }}" class="{% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}"><span class="ico">Admin</span></a>
     {% endif %}
+    <a href="{{ url_for('deficiencies_list') }}" class="{% if request.endpoint == 'deficiencies_list' %}active{% endif %}"><span class="ico">Issues</span></a>
     <a href="{{ url_for('logout') }}"><span class="ico">Sign out</span></a>
   </nav>
   {% endif %}

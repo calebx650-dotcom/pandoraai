@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Log Deficiency · IGH fireNspec{% endblock %}
+{% block topbar_title %}Log Deficiency{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <h2>{{ insp.customer_name }}</h2>
+  <p>{{ insp.site_name }}</p>
+</div>
+{% if item_label %}
+<div style="padding: 0 16px 8px;">
+  <div class="card" style="padding: 12px 16px; background: var(--fail-bg, #fff0f0);">
+    <span class="pill fail">Fail</span>
+    <span style="margin-left: 8px; font-weight: 600;">{{ item_label }}</span>
+  </div>
+</div>
+{% endif %}
+<form method="post">
+  <input type="hidden" name="item_id" value="{{ item_id }}">
+  <input type="hidden" name="item_label" value="{{ item_label }}">
+  <div class="card" style="padding-top: 6px; padding-bottom: 6px;">
+    <div class="field">
+      <label>Description <span style="color:var(--fail)">*</span></label>
+      <textarea name="description" rows="3" required placeholder="What specifically failed or needs attention?"></textarea>
+    </div>
+    <div class="field">
+      <label>Severity</label>
+      <select name="severity">
+        <option value="critical">Critical — immediate hazard</option>
+        <option value="major" selected>Major — repair required</option>
+        <option value="minor">Minor — monitor / low priority</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Assigned to</label>
+      <input type="text" name="assigned_to" placeholder="Name or company">
+    </div>
+    <div class="field">
+      <label>Due date</label>
+      <input type="date" name="due_date">
+    </div>
+  </div>
+  <div style="padding: 16px; display:flex; gap:10px;">
+    <button type="submit" class="btn full">Save deficiency</button>
+    <a href="{{ url_for('inspection', inspection_id=insp.id) }}" class="btn secondary full">Cancel</a>
+  </div>
+</form>
+{% endblock %}

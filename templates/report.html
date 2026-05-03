@@ -298,11 +298,38 @@
 
 </div>
 
+{% if report_deficiencies %}
+<div class="rpage">
+  <div class="rpage-bar"></div>
+  <div class="rpage-body">
+    <div class="rinfo-header">DEFICIENCIES</div>
+    <table class="rsummary-table">
+      <thead>
+        <tr><th>SEVERITY</th><th>ITEM</th><th>DESCRIPTION</th><th>STATUS</th><th>DUE</th></tr>
+      </thead>
+      <tbody>
+        {% for d in report_deficiencies %}
+        <tr {% if d.severity=='critical' %}style="background:#FCE8EC;"{% elif d.severity=='major' %}style="background:#FFF1DD;"{% endif %}>
+          <td><strong>{{ d.severity|title }}</strong></td>
+          <td>{{ d.item_label or '-' }}</td>
+          <td>{{ d.description }}</td>
+          <td>{{ d.status|title }}</td>
+          <td>{{ d.due_date or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="rpage-bar bottom"></div>
+</div>
+{% endif %}
+
 <div class="no-print" style="padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 720px; margin: 0 auto;">
   <button onclick="window.print()" class="btn">Print / Save PDF</button>
   <form method="post" action="{{ url_for('email_report', inspection_id=insp.id) }}" style="display: contents;">
     <button type="submit" class="btn secondary">Email this report</button>
   </form>
+  <a href="{{ url_for('new_deficiency', inspection_id=insp.id) }}" class="btn ghost no-print">+ Add deficiency</a>
   <a href="{{ url_for('dashboard') }}" class="btn ghost" style="grid-column: span 2;">Back to home</a>
 </div>
 {% endblock %}

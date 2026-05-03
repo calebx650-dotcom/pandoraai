@@ -4,6 +4,14 @@
 {% block content %}
 <div class="pagehead"><h2>Activity log</h2><p>Last 200 events.</p></div>
 
+<div style="padding: 0 16px 12px; display:flex; gap:8px; flex-wrap:wrap;">
+  <a href="{{ url_for('admin_users') }}" class="btn secondary">Users</a>
+  <a href="{{ url_for('admin_schedules') }}" class="btn secondary">Schedules</a>
+  <a href="{{ url_for('admin_invoices') }}" class="btn secondary">Invoices</a>
+  <a href="{{ url_for('admin_quickbooks') }}" class="btn secondary">QuickBooks</a>
+  <a href="{{ url_for('admin_templates') }}" class="btn secondary">Templates</a>
+</div>
+
 {% if events %}
 <div class="card">
   {% for e in events %}

@@ -94,6 +94,12 @@
                data-inspection-id="{{ insp.id }}"
                value="{{ answers.get(item.id, {}).get('note') or '' }}">
       </div>
+      {% if cur == 'fail' %}
+      <div style="margin-top: 6px;">
+        <a href="{{ url_for('new_deficiency', inspection_id=insp.id, item_id=item.id, item_label=item.label) }}"
+           class="btn secondary" style="font-size: 12px; padding: 6px 12px;">+ Log deficiency</a>
+      </div>
+      {% endif %}
     {% elif item.type == 'number' %}
       <input type="number"
              data-autosave-value

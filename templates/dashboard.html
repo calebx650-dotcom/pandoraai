@@ -7,6 +7,27 @@
   <p>{{ now.strftime('%A, %b %d, %Y') }}</p>
 </div>
 
+<div class="stats-row">
+  <a href="{{ url_for('sites') }}" class="stat-card">
+    <div class="stat-num">{{ stats.total_sites }}</div>
+    <div class="stat-lbl">Sites</div>
+  </a>
+  <a href="{{ url_for('deficiencies_list') }}" class="stat-card {% if stats.open_deficiencies %}warn{% endif %}">
+    <div class="stat-num">{{ stats.open_deficiencies }}</div>
+    <div class="stat-lbl">Open Issues</div>
+  </a>
+  <a href="{{ url_for('reports') }}" class="stat-card">
+    <div class="stat-num">{{ stats.open_inspections }}</div>
+    <div class="stat-lbl">In Progress</div>
+  </a>
+  {% if current_role == 'admin' %}
+  <a href="{{ url_for('admin_invoices') }}" class="stat-card {% if stats.unpaid_invoices %}warn{% endif %}">
+    <div class="stat-num">{{ stats.unpaid_invoices }}</div>
+    <div class="stat-lbl">Unpaid</div>
+  </a>
+  {% endif %}
+</div>
+
 {% if hydro_due %}
 <div class="card-title" style="color: var(--fail);">Hydrostatic test - action needed</div>
 <div class="card">
@@ -69,6 +90,25 @@
       <div class="sub">{{ d.customer_name }} - due {{ d.next_due|fmtdate }}</div>
     </div>
     <span class="pill due-soon">Soon</span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if scheduled_due %}
+<div class="card-title">Scheduled this month</div>
+<div class="card">
+  {% for s in scheduled_due %}
+  <a class="row clickable" href="{{ url_for('new_inspection') }}?site_id={{ s.site_id }}">
+    <div class="icon">{{ TEMPLATES[s.template_slug].icon if s.template_slug in TEMPLATES else '📋' }}</div>
+    <div class="meta">
+      <div class="title">{{ s.customer_name }} - {{ s.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[s.template_slug].name if s.template_slug in TEMPLATES else s.template_slug }} &middot; due {{ s.next_due|fmtdate }}</div>
+    </div>
+    <span class="pill {% if s.next_due < now.date().isoformat() %}overdue{% else %}due-soon{% endif %}">
+      {% if s.next_due < now.date().isoformat() %}Overdue{% else %}Due soon{% endif %}
+    </span>
     <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}

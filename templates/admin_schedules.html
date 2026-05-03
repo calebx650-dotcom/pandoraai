@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Schedules · IGH fireNspec{% endblock %}
+{% block topbar_title %}Inspection Schedules{% endblock %}
+{% block content %}
+<div class="pagehead"><h2>Recurring Schedules</h2></div>
+
+<details style="margin: 0 16px 16px;">
+  <summary style="padding: 12px 0; font-weight:600; color:var(--igh-orange); cursor:pointer;">+ Add schedule</summary>
+  <form method="post" action="{{ url_for('admin_schedule_new') }}" style="padding-top:6px;">
+    <div class="card" style="padding:6px 0;">
+      <div class="field">
+        <label>Site</label>
+        <select name="site_id" required>
+          {% for s in sites %}
+          <option value="{{ s.id }}">{{ s.customer_name }} — {{ s.site_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Inspection type</label>
+        <select name="template_slug" required>
+          {% for slug, t in TEMPLATES.items() %}
+          <option value="{{ slug }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Frequency (months)</label>
+        <select name="frequency_months">
+          <option value="1">Monthly</option>
+          <option value="3">Quarterly</option>
+          <option value="6">Semi-annual</option>
+          <option value="12" selected>Annual</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Next due date</label>
+        <input type="date" name="next_due">
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <input type="text" name="notes" placeholder="Optional">
+      </div>
+    </div>
+    <button type="submit" class="btn" style="margin-top:8px;">Add schedule</button>
+  </form>
+</details>
+
+{% if schedules %}
+<div class="card">
+  {% for s in schedules %}
+  <div class="row">
+    <div class="icon">{{ TEMPLATES[s.template_slug].icon if s.template_slug in TEMPLATES else '📋' }}</div>
+    <div class="meta">
+      <div class="title">{{ s.customer_name }} — {{ s.site_name }}</div>
+      <div class="sub">
+        {{ TEMPLATES[s.template_slug].name if s.template_slug in TEMPLATES else s.template_slug }}
+        &middot; every {{ s.frequency_months }}mo
+        &middot; next: {{ s.next_due|fmtdate if s.next_due else 'not set' }}
+      </div>
+      {% if s.notes %}<div class="sub" style="font-style:italic;">{{ s.notes }}</div>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('admin_schedule_delete', sched_id=s.id) }}">
+      <button type="submit" class="btn secondary" style="font-size:12px; padding:5px 10px;"
+              onclick="return confirm('Remove this schedule?')">Remove</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">No schedules yet.</div></div>
+{% endif %}
+{% endblock %}

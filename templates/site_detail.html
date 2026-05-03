@@ -7,13 +7,55 @@
   <p>
     {% if site.address %}{{ site.address }}<br>{% endif %}
     {% if site.contact_name %}{{ site.contact_name }}{% if site.contact_phone %} &middot; <a href="tel:{{ site.contact_phone }}">{{ site.contact_phone }}</a>{% endif %}{% endif %}
+    {% if site.contact_email %}<br><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% endif %}
   </p>
   {% if site.notes %}<p style="margin-top:6px; font-style: italic;">{{ site.notes }}</p>{% endif %}
 </div>
 
-<div style="padding: 0 16px 8px; display:flex; gap: 8px;">
+<div style="padding: 0 16px 8px; display:flex; gap: 8px; flex-wrap: wrap;">
   <a href="{{ url_for('new_inspection') }}?site_id={{ site.id }}" class="btn">+ New inspection</a>
+  {% if current_role == 'admin' %}
+  <button onclick="document.getElementById('edit-site-form').style.display='block';this.style.display='none'" class="btn secondary">Edit site</button>
+  {% endif %}
 </div>
+
+{% if current_role == 'admin' %}
+<div id="edit-site-form" style="display:none; padding: 0 16px 16px;">
+  <form method="post" action="{{ url_for('edit_site', site_id=site.id) }}">
+    <div class="card" style="padding: 6px 0;">
+      <div class="field"><label>Customer name</label><input type="text" name="customer_name" value="{{ site.customer_name }}" required></div>
+      <div class="field"><label>Site / location name</label><input type="text" name="site_name" value="{{ site.site_name }}" required></div>
+      <div class="field"><label>Address</label><input type="text" name="address" value="{{ site.address or '' }}"></div>
+      <div class="field"><label>Contact name</label><input type="text" name="contact_name" value="{{ site.contact_name or '' }}"></div>
+      <div class="field"><label>Contact phone</label><input type="tel" name="contact_phone" value="{{ site.contact_phone or '' }}"></div>
+      <div class="field"><label>Contact email</label><input type="email" name="contact_email" value="{{ site.contact_email or '' }}"></div>
+      <div class="field"><label>Notes</label><textarea name="notes" rows="2">{{ site.notes or '' }}</textarea></div>
+    </div>
+    <button type="submit" class="btn full" style="margin-top: 8px;">Save changes</button>
+  </form>
+</div>
+
+<!-- Customer portal link -->
+<div style="padding: 0 16px 12px;">
+  <div class="card-title">Customer portal</div>
+  <div class="card" style="padding: 12px 16px;">
+    {% if site.portal_token %}
+    <p style="font-size: 13px; word-break: break-all; color: var(--ink-2);">
+      {{ request.url_root.rstrip('/') }}/portal/{{ site.portal_token }}
+    </p>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <form method="post" action="{{ url_for('regen_portal_token', site_id=site.id) }}" style="display:inline;">
+        <button type="submit" class="btn secondary" style="font-size:13px;">Regenerate link</button>
+      </form>
+    </div>
+    {% else %}
+    <form method="post" action="{{ url_for('regen_portal_token', site_id=site.id) }}">
+      <button type="submit" class="btn secondary">Generate customer portal link</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <div class="card-title">Devices ({{ devices|length }})</div>
 {% if devices %}
@@ -50,7 +92,20 @@
 <div class="card"><div class="empty">No devices yet.</div></div>
 {% endif %}
 
-<details style="margin: 6px 16px 16px;">
+<details style="margin: 6px 16px 4px;">
+  <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-orange); cursor: pointer;">+ Import devices from CSV</summary>
+  <form method="post" action="{{ url_for('import_devices', site_id=site.id) }}" enctype="multipart/form-data" style="padding-top: 4px;">
+    <div class="card" style="padding: 10px 0;">
+      <div class="field">
+        <label>CSV file (columns: device_type, barcode, model, serial, location)</label>
+        <input type="file" name="csvfile" accept=".csv,text/csv" required>
+      </div>
+    </div>
+    <button type="submit" class="btn secondary" style="margin-top: 6px;">Import</button>
+  </form>
+</details>
+
+<details style="margin: 0 16px 16px;">
   <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-orange); cursor: pointer;">+ Add device</summary>
   <form method="post" action="{{ url_for('new_device', site_id=site.id) }}" style="padding-top: 6px;">
     <div class="card" style="padding: 6px 0;">

@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'inspector'
+    role TEXT NOT NULL DEFAULT 'inspector',
+    active INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS sites (
@@ -25,7 +26,9 @@ CREATE TABLE IF NOT EXISTS sites (
     address TEXT,
     contact_name TEXT,
     contact_phone TEXT,
+    contact_email TEXT,
     notes TEXT,
+    portal_token TEXT UNIQUE,
     created_at TEXT NOT NULL
 );
 
@@ -123,6 +126,61 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS deficiencies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id INTEGER NOT NULL,
+    site_id INTEGER NOT NULL,
+    item_id TEXT,
+    item_label TEXT,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'major',
+    status TEXT NOT NULL DEFAULT 'open',
+    assigned_to TEXT,
+    due_date TEXT,
+    resolution_notes TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    FOREIGN KEY(inspection_id) REFERENCES inspections(id),
+    FOREIGN KEY(site_id) REFERENCES sites(id),
+    FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS site_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    site_id INTEGER NOT NULL,
+    template_slug TEXT NOT NULL,
+    frequency_months INTEGER NOT NULL DEFAULT 12,
+    next_due TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(site_id) REFERENCES sites(id)
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id INTEGER,
+    site_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    description TEXT,
+    qb_invoice_id TEXT,
+    created_at TEXT NOT NULL,
+    sent_at TEXT,
+    paid_at TEXT,
+    FOREIGN KEY(inspection_id) REFERENCES inspections(id),
+    FOREIGN KEY(site_id) REFERENCES sites(id)
+);
+
+CREATE TABLE IF NOT EXISTS quickbooks_config (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    qb_realm_id TEXT,
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expires_at TEXT,
+    updated_at TEXT
+);
 """
 
 # Columns we may need to ADD to existing tables on upgrade
@@ -134,6 +192,9 @@ MIGRATIONS = [
     ("devices", "qr_token", "TEXT"),
     ("devices", "notes", "TEXT"),
     ("inspection_photos", "device_id", "INTEGER"),
+    ("sites", "contact_email", "TEXT"),
+    ("sites", "portal_token", "TEXT"),
+    ("users", "active", "INTEGER NOT NULL DEFAULT 1"),
 ]
 
 
