@@ -1,12 +1,13 @@
 # flyctl launch added from .gitignore
-**\__pycache__
-**\*.pyc
-**\firenspec.db
-**\firenspec.db-journal
-**\custom_templates.json
-**\static\uploads
-**\test_size.bin
-**\.env
-**\.venv
-**\.DS_Store
+**/__pycache__
+**/*.pyc
+**/firenspec.db
+**/firenspec.db-journal
+**/custom_templates.json
+**/static/uploads
+**/test_size.bin
+**/.env
+**/.venv
+**/.DS_Store
 fly.toml
+
