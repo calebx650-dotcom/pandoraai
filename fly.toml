@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for igh-firenspec on 2026-04-28T17:37:35-05:00
+# fly.toml app configuration file generated for pandoraai on 2026-05-07T01:54:37Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'igh-firenspec'
+app = 'pandoraai'
 primary_region = 'dfw'
 
 [build]
@@ -26,5 +26,6 @@ primary_region = 'dfw'
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 512
