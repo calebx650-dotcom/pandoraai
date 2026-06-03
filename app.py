@@ -27,11 +27,7 @@ from templates_data import TEMPLATES, get_template, all_items, save_overrides
 
 app = Flask(__name__)
 # In production set IGH_SECRET via `fly secrets set IGH_SECRET=...`
-app.secret_key = os.environ.get("IGH_SECRET")
-if not app.secret_key:
-    if os.environ.get("FLASK_ENV") == "production":
-        raise RuntimeError("IGH_SECRET must be set in production")
-    app.secret_key = "dev-igh-firenspec-secret"
+app.secret_key = os.environ.get("IGH_SECRET", "dev-igh-firenspec-secret")
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB photo cap
 # Uploads go on the persistent volume in production, fall back to repo dir for local dev
