@@ -13,3 +13,6 @@ spectofire.zip
 ziwJ2Uv2
 uploads/
 DEPLOY.md
+mobile/node_modules/
+mobile/ios/App/Pods/
+mobile/ios/.build/
