@@ -4,18 +4,18 @@
 {% block content %}
 <div class="pagehead"><h2>Invoices</h2></div>
 
-<div style="padding: 0 16px 8px; display:flex; gap:8px;">
+<div class="btn-row">
   <a href="{{ url_for('admin_quickbooks') }}" class="btn secondary">QuickBooks sync</a>
 </div>
 
-<details style="margin: 0 16px 16px;">
-  <summary style="padding: 12px 0; font-weight:600; color:var(--igh-orange); cursor:pointer;">+ Create invoice</summary>
-  <form method="post" action="{{ url_for('create_invoice') }}" style="padding-top:6px;">
-    <div class="card" style="padding:6px 0;">
+<details class="collapse-form">
+  <summary>+ Create invoice</summary>
+  <form method="post" action="{{ url_for('create_invoice') }}">
+    <div class="card">
       <div class="field">
         <label>Site</label>
         <select name="site_id" required id="inv-site">
-          <option value="">-- select site --</option>
+          <option value="">Loading sites...</option>
         </select>
       </div>
       <div class="field">
@@ -27,22 +27,19 @@
         <input type="text" name="description" placeholder="Annual extinguisher inspection – 5 units">
       </div>
     </div>
-    <button type="submit" class="btn" style="margin-top:8px;">Create draft</button>
+    <div class="btn-row"><button type="submit" class="btn">Create draft</button></div>
   </form>
 </details>
 
 <script>
-fetch('/admin/export/sites.csv').then(r => r.text()).then(csv => {
-  const lines = csv.trim().split('\n').slice(1);
+fetch('/api/sites').then(r => r.json()).then(sites => {
   const sel = document.getElementById('inv-site');
-  lines.forEach(line => {
-    const cols = line.split(',');
-    if (cols.length >= 3) {
-      const opt = document.createElement('option');
-      opt.value = cols[0];
-      opt.textContent = `${cols[1]} — ${cols[2]}`;
-      sel.appendChild(opt);
-    }
+  sel.innerHTML = '<option value="">-- select site --</option>';
+  sites.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.label;
+    sel.appendChild(opt);
   });
 });
 </script>
@@ -55,27 +52,27 @@ fetch('/admin/export/sites.csv').then(r => r.text()).then(csv => {
 <div class="card">
   {% for inv in invoices %}
   <div class="item">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="item-head">
       <div>
         {{ status_pill(inv.status) }}
-        <span style="margin-left:8px; font-weight:600;">${{ '%.2f'|format(inv.amount_cents / 100) }}</span>
+        <span class="title" style="margin-left:4px;">${{ '%.2f'|format(inv.amount_cents / 100) }}</span>
       </div>
-      <span style="font-size:11px; color:var(--ink-3);">{{ inv.created_at|fmtdate }}</span>
+      <span class="sub">{{ inv.created_at|fmtdate }}</span>
     </div>
-    <div style="margin-top:4px; font-size:13px; color:var(--ink-2);">{{ inv.customer_name }} — {{ inv.site_name }}</div>
+    <div class="sub">{{ inv.customer_name }} — {{ inv.site_name }}</div>
     {% if inv.description %}<div class="sub">{{ inv.description }}</div>{% endif %}
-    {% if inv.qb_invoice_id %}<div class="sub" style="color:var(--pass);">QB #{{ inv.qb_invoice_id }}</div>{% endif %}
-    <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+    {% if inv.qb_invoice_id %}<div class="sub" style="color:var(--pass-ink);">QB #{{ inv.qb_invoice_id }}</div>{% endif %}
+    <div class="item-actions">
       {% if inv.status == 'draft' %}
       <form method="post" action="{{ url_for('invoice_status', inv_id=inv.id) }}">
         <input type="hidden" name="status" value="sent">
-        <button type="submit" class="btn secondary" style="font-size:12px; padding:5px 10px;">Mark sent</button>
+        <button type="submit" class="btn secondary small">Mark sent</button>
       </form>
       {% endif %}
       {% if inv.status in ('draft','sent') %}
       <form method="post" action="{{ url_for('invoice_status', inv_id=inv.id) }}">
         <input type="hidden" name="status" value="paid">
-        <button type="submit" class="btn" style="font-size:12px; padding:5px 10px;">Mark paid</button>
+        <button type="submit" class="btn small">Mark paid</button>
       </form>
       {% endif %}
     </div>

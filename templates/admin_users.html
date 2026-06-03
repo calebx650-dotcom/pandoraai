@@ -5,7 +5,7 @@
 <div class="pagehead">
   <h2>User accounts</h2>
 </div>
-<div style="padding: 0 16px 12px;">
+<div class="btn-row">
   <a href="{{ url_for('admin_user_new') }}" class="btn">+ New user</a>
 </div>
 <div class="card">
@@ -14,9 +14,9 @@
     <div class="icon">{{ u.full_name[0].upper() }}</div>
     <div class="meta">
       <div class="title">{{ u.full_name }}</div>
-      <div class="sub">{{ u.username }} &middot; {{ u.role }}{% if not u.active %} &middot; <span style="color:var(--fail)">Inactive</span>{% endif %}</div>
+      <div class="sub">{{ u.username }} &middot; {{ u.role }}{% if not u.active %} &middot; <span class="pill fail">Inactive</span>{% endif %}</div>
     </div>
-    <a href="{{ url_for('admin_user_edit', uid=u.id) }}" class="btn secondary" style="font-size:13px;">Edit</a>
+    <a href="{{ url_for('admin_user_edit', uid=u.id) }}" class="btn secondary small">Edit</a>
   </div>
   {% endfor %}
 </div>

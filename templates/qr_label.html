@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR Label - {{ device.barcode or device.serial or device.id }}</title>
+  <style>
+    /* Minimal print-first stylesheet. No app chrome. */
+    :root {
+      --ink: #13334A;
+      --label-2: #3C3C43;
+      --label-3: #8E8E93;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #F2F2F7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+    }
+    .screen-bar {
+      position: sticky;
+      top: 0;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      padding: 12px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0,0,0,.08);
+      z-index: 10;
+    }
+    .screen-bar h1 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .btn {
+      appearance: none;
+      border: 0;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: #E84E2C;
+      color: white;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn.ghost {
+      background: #E5E5EA;
+      color: var(--ink);
+    }
+    .stage {
+      padding: 20px 16px 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    /* The actual label, sized for ~2"x1" thermal/Avery label.
+       1in = 96px at 96dpi. Keep extra padding for the print sheet. */
+    .label {
+      width: 2.4in;
+      min-height: 1.2in;
+      padding: 0.08in 0.1in;
+      background: white;
+      border: 1px solid #d1d1d6;
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: 1.05in 1fr;
+      gap: 0.08in;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,.06);
+    }
+    .label .qr {
+      width: 1.05in;
+      height: 1.05in;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .label .meta {
+      min-width: 0;
+      font-size: 9pt;
+      line-height: 1.25;
+      color: var(--ink);
+    }
+    .label .meta .brand {
+      font-weight: 700;
+      font-size: 8pt;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #E84E2C;
+    }
+    .label .meta .barcode {
+      font-family: "SF Mono", ui-monospace, "Menlo", monospace;
+      font-size: 10pt;
+      font-weight: 700;
+      margin-top: 2px;
+      word-break: break-all;
+    }
+    .label .meta .sub {
+      color: var(--label-2);
+      margin-top: 2px;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+    .label .meta .scan {
+      color: var(--label-3);
+      font-size: 7pt;
+      margin-top: 4px;
+    }
+    .hint {
+      max-width: 360px;
+      text-align: center;
+      color: var(--label-3);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    /* Print rules: hide everything except the label, no margins. */
+    @page {
+      size: 2.4in 1.2in;
+      margin: 0;
+    }
+    @media print {
+      body { background: white; }
+      .screen-bar, .hint { display: none !important; }
+      .stage { padding: 0; }
+      .label {
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        width: 2.4in;
+        height: 1.2in;
+        page-break-after: always;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-bar">
+    <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn ghost">Back</a>
+    <h1>QR Label</h1>
+    <button type="button" class="btn" onclick="window.print()">Print</button>
+  </div>
+
+  <div class="stage">
+    <div class="label" id="qr-label">
+      <img class="qr"
+           src="{{ url_for('device_qr_png', device_id=device.id) }}"
+           alt="QR code">
+      <div class="meta">
+        <div class="brand">IGH Fire Safety</div>
+        <div class="barcode">{{ device.barcode or device.serial or ('#' ~ device.id) }}</div>
+        <div class="sub">
+          {%- if device.extinguisher_type %}{{ device.extinguisher_type }}
+          {%- if device.extinguisher_size %} - {{ device.extinguisher_size }}{% endif %}
+          {%- elif device.model %}{{ device.model }}
+          {%- else %}{{ device.device_type }}{% endif -%}
+        </div>
+        <div class="sub">{{ device.location or device.site_name }}</div>
+        <div class="scan">Scan for device record</div>
+      </div>
+    </div>
+    <div class="hint">
+      Print on a 2.4" x 1.2" label or peel-and-stick sheet. Use your browser's
+      print dialog (Cmd/Ctrl + P) for best results.
+    </div>
+  </div>
+</body>
+</html>

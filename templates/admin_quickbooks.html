@@ -8,31 +8,35 @@
 </div>
 
 {% if cfg and cfg.qb_realm_id %}
-<div class="card" style="padding: 16px;">
-  <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-    <span class="pill pass">Connected</span>
-    <span style="font-size:13px; color:var(--ink-2);">Realm: {{ cfg.qb_realm_id }}</span>
+<div class="card">
+  <div class="item">
+    <div class="item-head">
+      <span class="pill pass">Connected</span>
+      <span class="sub">Realm: {{ cfg.qb_realm_id }}</span>
+    </div>
+    <div class="sub">Token expires: {{ cfg.token_expires_at|fmtdate if cfg.token_expires_at else 'unknown' }}</div>
+    <div class="item-actions">
+      <form method="post" action="{{ url_for('qb_disconnect') }}">
+        <button type="submit" class="btn danger small">Disconnect QuickBooks</button>
+      </form>
+    </div>
   </div>
-  <p style="font-size:13px; color:var(--ink-2); margin-bottom:16px;">
-    Token expires: {{ cfg.token_expires_at|fmtdate if cfg.token_expires_at else 'unknown' }}
-  </p>
-  <form method="post" action="{{ url_for('qb_disconnect') }}">
-    <button type="submit" class="btn secondary" style="color:var(--fail);">Disconnect QuickBooks</button>
-  </form>
 </div>
 {% else %}
-<div class="card" style="padding: 16px;">
-  <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+<div class="card">
+  <div class="item">
     <span class="pill na">Not connected</span>
+    <div class="sub" style="margin-top:8px; line-height:1.5;">
+      Connect to QuickBooks Online to automatically sync invoices, customers, and payment status.
+      Once connected, invoices created in fireNspec will appear in QuickBooks as draft invoices.
+    </div>
+    <div class="item-actions">
+      <a href="{{ url_for('qb_connect') }}" class="btn">Connect to QuickBooks</a>
+    </div>
   </div>
-  <p style="font-size:14px; color:var(--ink-2); margin-bottom:16px; line-height:1.5;">
-    Connect to QuickBooks Online to automatically sync invoices, customers, and payment status.
-    Once connected, invoices created in fireNspec will appear in QuickBooks as draft invoices.
-  </p>
-  <a href="{{ url_for('qb_connect') }}" class="btn">Connect to QuickBooks</a>
 </div>
 
-<div class="card-title" style="margin-top:16px;">What syncs</div>
+<div class="card-title">What syncs</div>
 <div class="card">
   <div class="item">
     <div class="title">Customers &amp; sites</div>
@@ -48,8 +52,8 @@
   </div>
 </div>
 
-<div style="padding: 16px; font-size:12px; color:var(--ink-3);">
-  QuickBooks OAuth2 integration is coming soon. Your invoice data is already being collected and ready to sync once the connection is live.
+<div class="btn-row" style="padding-top:0;">
+  <span class="sub">QuickBooks OAuth2 integration is coming soon. Your invoice data is already being collected and ready to sync once the connection is live.</span>
 </div>
 {% endif %}
 {% endblock %}

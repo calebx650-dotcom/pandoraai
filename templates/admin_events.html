@@ -4,12 +4,12 @@
 {% block content %}
 <div class="pagehead"><h2>Activity log</h2><p>Last 200 events.</p></div>
 
-<div style="padding: 0 16px 12px; display:flex; gap:8px; flex-wrap:wrap;">
-  <a href="{{ url_for('admin_users') }}" class="btn secondary">Users</a>
-  <a href="{{ url_for('admin_schedules') }}" class="btn secondary">Schedules</a>
-  <a href="{{ url_for('admin_invoices') }}" class="btn secondary">Invoices</a>
-  <a href="{{ url_for('admin_quickbooks') }}" class="btn secondary">QuickBooks</a>
-  <a href="{{ url_for('admin_templates') }}" class="btn secondary">Templates</a>
+<div class="btn-row">
+  <a href="{{ url_for('admin_users') }}" class="btn secondary small">Users</a>
+  <a href="{{ url_for('admin_schedules') }}" class="btn secondary small">Schedules</a>
+  <a href="{{ url_for('admin_invoices') }}" class="btn secondary small">Invoices</a>
+  <a href="{{ url_for('admin_quickbooks') }}" class="btn secondary small">QuickBooks</a>
+  <a href="{{ url_for('admin_templates') }}" class="btn secondary small">Templates</a>
 </div>
 
 {% if events %}
@@ -23,7 +23,7 @@
         {% if e.target_type %} - {{ e.target_type }} #{{ e.target_id }}{% endif %}
         {% if e.detail %} - {{ e.detail }}{% endif %}
       </div>
-      <div class="sub" style="margin-top: 2px;">{{ e.created_at|relative }} ({{ e.created_at|fmtdate }})</div>
+      <div class="sub">{{ e.created_at|relative }} ({{ e.created_at|fmtdate }})</div>
     </div>
   </div>
   {% endfor %}

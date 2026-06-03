@@ -205,6 +205,23 @@ def dashboard():
         "SELECT COUNT(*) FROM inspections WHERE status='in_progress'").fetchone()[0]
     stats["unpaid_invoices"] = conn.execute(
         "SELECT COUNT(*) FROM invoices WHERE status IN ('draft','sent')").fetchone()[0]
+    stats["pending_approvals"] = conn.execute(
+        "SELECT COUNT(*) FROM inspections WHERE status='completed' AND approval_status='pending'"
+    ).fetchone()[0]
+    # Inspector-side: their own work currently in pending / rejected state
+    my_pending = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        WHERE i.inspector_id = ? AND i.status='completed' AND i.approval_status='pending'
+        ORDER BY i.completed_at DESC LIMIT 6
+    """, (session["user_id"],)).fetchall()
+    my_rejected = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        WHERE i.inspector_id = ? AND i.approval_status='rejected'
+        ORDER BY i.completed_at DESC LIMIT 6
+    """, (session["user_id"],)).fetchall()
+    stats["my_pending"] = len(my_pending)
     month_end = (datetime.utcnow().date() + timedelta(days=30)).isoformat()
     scheduled_due = conn.execute("""
         SELECT ss.*, s.customer_name, s.site_name
@@ -215,7 +232,8 @@ def dashboard():
     conn.close()
     return render_template("dashboard.html",
         in_progress=in_progress, recent=recent, overdue=overdue, upcoming=upcoming,
-        hydro_due=hydro_due, stats=stats, scheduled_due=scheduled_due)
+        hydro_due=hydro_due, stats=stats, scheduled_due=scheduled_due,
+        my_pending=my_pending, my_rejected=my_rejected)
 
 
 # ---------- sites ----------
@@ -523,6 +541,16 @@ def save_signature(inspection_id):
     return jsonify({"ok": True})
 
 
+# ---------- API: sites list for JS dropdowns ----------
+@app.route("/api/sites")
+@login_required
+def api_sites():
+    conn = get_conn()
+    rows = conn.execute("SELECT id, customer_name, site_name FROM sites ORDER BY customer_name").fetchall()
+    conn.close()
+    return jsonify([{"id": r["id"], "label": f"{r['customer_name']} — {r['site_name']}"} for r in rows])
+
+
 # ---------- barcode lookup ----------
 @app.route("/api/lookup_barcode")
 @login_required
@@ -542,14 +570,42 @@ def lookup_barcode():
     return jsonify({"ok": True, "device": dict(d)})
 
 
+@app.route("/api/devices/<int:device_id>/summary")
+@login_required
+def device_summary(device_id):
+    """Lightweight JSON summary used by the camera-scan flow on inspection pages.
+
+    Inspector scans a /d/<id> QR -> the scanner resolves it here and fills the
+    barcode input on the active inspection so the lookup banner matches.
+    """
+    conn = get_conn()
+    d = conn.execute("""
+        SELECT d.id, d.barcode, d.serial, d.device_type, d.model, d.location,
+               d.extinguisher_type, d.extinguisher_size,
+               s.customer_name, s.site_name
+        FROM devices d JOIN sites s ON s.id = d.site_id
+        WHERE d.id = ?
+    """, (device_id,)).fetchone()
+    conn.close()
+    if not d:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    out = dict(d)
+    out["ok"] = True
+    return jsonify(out)
+
+
 # ---------- complete + report ----------
 @app.route("/inspections/<int:inspection_id>/complete", methods=["POST"])
 @login_required
 def complete_inspection(inspection_id):
     f = request.form
     conn = get_conn()
-    # Don't overwrite drawn signatures (data URLs) with empty strings
-    sets = ["status='completed'", "completed_at=?", "customer_email=?", "notes=?"]
+    # Don't overwrite drawn signatures (data URLs) with empty strings.
+    # Newly completed inspections go to approval_status='pending' — they are NOT
+    # visible to clients/portals until an admin approves them.
+    sets = ["status='completed'", "completed_at=?", "customer_email=?", "notes=?",
+            "approval_status='pending'", "approved_by=NULL", "approved_at=NULL",
+            "rejection_reason=NULL"]
     vals = [datetime.utcnow().isoformat(timespec="seconds"),
             f.get("customer_email", "").strip(),
             f.get("notes", "").strip()]
@@ -579,6 +635,15 @@ def complete_inspection(inspection_id):
                     UPDATE devices SET last_inspected = ?, next_due = ?
                     WHERE site_id = ? AND device_type = ?
                 """, (datetime.utcnow().date().isoformat(), next_due, insp["site_id"], dt))
+    # Advance site schedule next_due date
+    if insp:
+        sched = conn.execute("""
+            SELECT id, frequency_months FROM site_schedules
+            WHERE site_id=? AND template_slug=?
+        """, (insp["site_id"], insp["template_slug"])).fetchone()
+        if sched:
+            next_due = (datetime.utcnow().date() + timedelta(days=sched["frequency_months"] * 30)).isoformat()
+            conn.execute("UPDATE site_schedules SET next_due=? WHERE id=?", (next_due, sched["id"]))
     conn.commit(); conn.close()
     log_event(session["user_id"], "inspection_completed", "inspection", inspection_id)
     flash("Inspection completed and report ready.", "success")
@@ -674,6 +739,165 @@ def reports():
     """).fetchall()
     conn.close()
     return render_template("reports.html", inspections=rows)
+
+
+# ---------- admin: approval queue ----------
+@app.route("/admin/approvals")
+@login_required
+@admin_required
+def admin_approvals():
+    """Pending-state approval queue. Lists completed inspections awaiting admin sign-off.
+
+    Per system requirements, no client-visible data is exposed until an admin
+    approves the inspection (and its deficiencies)."""
+    conn = get_conn()
+    pending = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, u.full_name AS inspector_name,
+               (SELECT COUNT(*) FROM deficiencies WHERE inspection_id = i.id) AS def_count
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.status = 'completed' AND i.approval_status = 'pending'
+        ORDER BY i.completed_at ASC
+    """).fetchall()
+    recently_approved = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, u.full_name AS inspector_name,
+               a.full_name AS approver_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        LEFT JOIN users a ON a.id = i.approved_by
+        WHERE i.approval_status = 'approved'
+        ORDER BY i.approved_at DESC LIMIT 10
+    """).fetchall()
+    rejected = conn.execute("""
+        SELECT i.*, s.customer_name, s.site_name, u.full_name AS inspector_name
+        FROM inspections i
+        JOIN sites s ON s.id = i.site_id
+        JOIN users u ON u.id = i.inspector_id
+        WHERE i.approval_status = 'rejected'
+        ORDER BY i.completed_at DESC LIMIT 10
+    """).fetchall()
+    conn.close()
+    return render_template("admin_approvals.html",
+                           pending=pending, recently_approved=recently_approved,
+                           rejected=rejected)
+
+
+@app.route("/admin/inspections/<int:inspection_id>/approve", methods=["POST"])
+@login_required
+@admin_required
+def approve_inspection(inspection_id):
+    """Admin approves an inspection. Cascades approval to its deficiencies so
+    they become visible in the customer portal at the same time. Audit-logged."""
+    conn = get_conn()
+    insp = conn.execute(
+        "SELECT id, approval_status FROM inspections WHERE id = ?",
+        (inspection_id,)
+    ).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    prev = insp["approval_status"]
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    conn.execute(
+        """UPDATE inspections
+           SET approval_status='approved', approved_by=?, approved_at=?,
+               rejection_reason=NULL
+           WHERE id=?""",
+        (session["user_id"], now, inspection_id)
+    )
+    # Cascade to deficiencies attached to this inspection
+    conn.execute(
+        "UPDATE deficiencies SET approval_status='approved' WHERE inspection_id=?",
+        (inspection_id,)
+    )
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "inspection_approved", "inspection", inspection_id,
+              f"{prev} -> approved")
+    flash("Inspection approved. Customer portal will now show this report.", "success")
+    return redirect(request.referrer or url_for("admin_approvals"))
+
+
+@app.route("/admin/inspections/<int:inspection_id>/reject", methods=["POST"])
+@login_required
+@admin_required
+def reject_inspection(inspection_id):
+    """Admin rejects an inspection. The rejection_reason is preserved so the
+    inspector can revise and resubmit. Stays invisible to clients. Audit-logged."""
+    reason = (request.form.get("rejection_reason") or "").strip()
+    if not reason:
+        flash("A rejection reason is required so the inspector knows what to fix.", "error")
+        return redirect(request.referrer or url_for("admin_approvals"))
+    conn = get_conn()
+    insp = conn.execute(
+        "SELECT id, approval_status FROM inspections WHERE id = ?",
+        (inspection_id,)
+    ).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    prev = insp["approval_status"]
+    conn.execute(
+        """UPDATE inspections
+           SET approval_status='rejected', rejection_reason=?,
+               approved_by=NULL, approved_at=NULL
+           WHERE id=?""",
+        (reason, inspection_id)
+    )
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "inspection_rejected", "inspection", inspection_id,
+              f"{prev} -> rejected: {reason[:80]}")
+    flash("Inspection sent back to the inspector with feedback.", "success")
+    return redirect(request.referrer or url_for("admin_approvals"))
+
+
+@app.route("/inspections/<int:inspection_id>/resubmit", methods=["POST"])
+@login_required
+def resubmit_inspection(inspection_id):
+    """Inspector resubmits a rejected inspection. Resets state to pending."""
+    conn = get_conn()
+    insp = conn.execute(
+        "SELECT id, inspector_id, approval_status FROM inspections WHERE id = ?",
+        (inspection_id,)
+    ).fetchone()
+    if not insp:
+        conn.close(); abort(404)
+    if insp["inspector_id"] != session["user_id"] and session.get("user_role") != "admin":
+        conn.close(); abort(403)
+    if insp["approval_status"] != "rejected":
+        conn.close()
+        flash("Only rejected inspections can be resubmitted.", "error")
+        return redirect(url_for("inspection", inspection_id=inspection_id))
+    conn.execute(
+        """UPDATE inspections
+           SET approval_status='pending', rejection_reason=NULL
+           WHERE id=?""",
+        (inspection_id,)
+    )
+    conn.commit(); conn.close()
+    log_event(session["user_id"], "inspection_resubmitted", "inspection", inspection_id,
+              "rejected -> pending")
+    flash("Inspection resubmitted for admin review.", "success")
+    return redirect(url_for("inspection", inspection_id=inspection_id))
+
+
+# ---------- profile / "More" tab ----------
+@app.route("/profile")
+@login_required
+def profile():
+    """The 'More' tab — user profile + quick links to inspector tools + admin menu."""
+    conn = get_conn()
+    open_defs = conn.execute(
+        "SELECT COUNT(*) FROM deficiencies WHERE status='open'"
+    ).fetchone()[0]
+    pending_approvals = 0
+    if session.get("user_role") == "admin":
+        pending_approvals = conn.execute(
+            "SELECT COUNT(*) FROM inspections WHERE status='completed' AND approval_status='pending'"
+        ).fetchone()[0]
+    conn.close()
+    return render_template("profile.html",
+                           open_defs=open_defs,
+                           pending_approvals=pending_approvals)
 
 
 # ---------- admin: template editor + activity log ----------
@@ -833,7 +1057,11 @@ def device_detail(device_id):
 
 @app.route("/qr/<token>")
 def device_by_qr(token):
-    """Public QR-scan landing. Asks for login if not authed, then shows device detail."""
+    """Public QR-scan landing (token-based, legacy printed labels).
+
+    Looks up the device by random token then routes to the device record.
+    Unauthenticated users are bounced to login first so the record stays gated.
+    """
     conn = get_conn()
     d = conn.execute("SELECT id FROM devices WHERE qr_token = ?", (token,)).fetchone()
     conn.close()
@@ -844,16 +1072,39 @@ def device_by_qr(token):
     return redirect(url_for("device_detail", device_id=d["id"]))
 
 
+@app.route("/d/<int:device_id>")
+def device_short(device_id):
+    """Short URL for QR codes — /d/123 → device detail (auth-gated).
+
+    Used as the payload for newly generated QR codes (shorter than /qr/<token>,
+    which keeps the printed QR denser and easier for phone cameras to lock onto).
+    """
+    conn = get_conn()
+    d = conn.execute("SELECT id FROM devices WHERE id = ?", (device_id,)).fetchone()
+    conn.close()
+    if not d:
+        abort(404)
+    if "user_id" not in session:
+        return redirect(url_for("login", next=url_for("device_detail", device_id=device_id)))
+    return redirect(url_for("device_detail", device_id=device_id))
+
+
 @app.route("/devices/<int:device_id>/qr.png")
 @login_required
 def device_qr_png(device_id):
+    """Render a PNG QR code that encodes the device's short URL (/d/<id>).
+
+    Falls back to /qr/<token> when the legacy token is present, so labels
+    that were already printed continue to resolve.
+    """
     conn = get_conn()
-    d = conn.execute("SELECT qr_token FROM devices WHERE id = ?", (device_id,)).fetchone()
+    d = conn.execute("SELECT id, qr_token FROM devices WHERE id = ?", (device_id,)).fetchone()
     conn.close()
-    if not d or not d["qr_token"]:
+    if not d:
         abort(404)
     base_url = request.url_root.rstrip("/")
-    target = f"{base_url}/qr/{d['qr_token']}"
+    # Prefer the short, stable /d/<id> URL for new labels.
+    target = f"{base_url}/d/{d['id']}"
     qr = qrcode.QRCode(box_size=8, border=2)
     qr.add_data(target)
     qr.make(fit=True)
@@ -863,6 +1114,22 @@ def device_qr_png(device_id):
     buf.seek(0)
     from flask import send_file
     return send_file(buf, mimetype="image/png", download_name=f"qr_{device_id}.png")
+
+
+@app.route("/devices/<int:device_id>/label")
+@login_required
+def device_qr_label(device_id):
+    """Printable QR label page (~2"x1"), browser-printed via window.print()."""
+    conn = get_conn()
+    d = conn.execute("""
+        SELECT d.*, s.customer_name, s.site_name
+        FROM devices d JOIN sites s ON s.id = d.site_id
+        WHERE d.id = ?
+    """, (device_id,)).fetchone()
+    conn.close()
+    if not d:
+        abort(404)
+    return render_template("qr_label.html", device=d)
 
 
 @app.route("/devices/<int:device_id>/edit", methods=["POST"])
@@ -1159,6 +1426,11 @@ def admin_schedule_delete(sched_id):
 # ---------- customer portal ----------
 @app.route("/portal/<token>")
 def customer_portal(token):
+    """Public customer portal.
+
+    APPROVAL GATE: Only APPROVED inspections and their deficiencies are visible.
+    Pending and rejected work is never exposed to the client side.
+    """
     conn = get_conn()
     site = conn.execute("SELECT * FROM sites WHERE portal_token=?", (token,)).fetchone()
     if not site:
@@ -1167,10 +1439,18 @@ def customer_portal(token):
         SELECT i.*, u.full_name AS inspector_name
         FROM inspections i JOIN users u ON u.id = i.inspector_id
         WHERE i.site_id = ? AND i.status = 'completed'
+              AND i.approval_status = 'approved'
         ORDER BY i.completed_at DESC
     """, (site["id"],)).fetchall()
+    # Deficiencies are also approval-gated. We only show those tied to an
+    # approved inspection (or with their own approval_status='approved').
     deficiencies = conn.execute("""
-        SELECT * FROM deficiencies WHERE site_id=? ORDER BY created_at DESC
+        SELECT d.* FROM deficiencies d
+        LEFT JOIN inspections i ON i.id = d.inspection_id
+        WHERE d.site_id = ?
+              AND d.approval_status = 'approved'
+              AND (i.approval_status IS NULL OR i.approval_status = 'approved')
+        ORDER BY d.created_at DESC
     """, (site["id"],)).fetchall()
     conn.close()
     return render_template("portal.html", site=site, inspections=inspections,

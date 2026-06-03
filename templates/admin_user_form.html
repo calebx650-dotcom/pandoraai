@@ -5,7 +5,7 @@
 <div class="pagehead"><h2>{{ 'Edit' if user else 'Add' }} user account</h2></div>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 <form method="post">
-  <div class="card" style="padding-top: 6px; padding-bottom: 6px;">
+  <div class="card">
     <div class="field"><label>Full name</label>
       <input type="text" name="full_name" required value="{{ user.full_name if user else '' }}">
     </div>
@@ -25,14 +25,14 @@
     </div>
     {% if user %}
     <div class="field">
-      <label style="display:flex; align-items:center; gap:8px;">
-        <input type="checkbox" name="active" value="1" {% if user.active %}checked{% endif %} style="width:22px;height:22px;">
+      <label style="display:flex; align-items:center; gap:8px; font-size: var(--t-body); font-weight: 400; color: var(--label);">
+        <input type="checkbox" name="active" value="1" {% if user.active %}checked{% endif %} style="width:22px;height:22px;flex-shrink:0;">
         Active account
       </label>
     </div>
     {% endif %}
   </div>
-  <div style="padding: 16px; display: flex; gap: 10px;">
+  <div class="btn-row" style="padding-top:16px;">
     <button type="submit" class="btn full">{{ 'Save changes' if user else 'Create user' }}</button>
     <a href="{{ url_for('admin_users') }}" class="btn secondary full">Cancel</a>
   </div>

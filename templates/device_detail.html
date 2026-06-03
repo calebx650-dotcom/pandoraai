@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ device.barcode or device.serial }} - Spectofire{% endblock %}
-{% block topbar_title %}Device Details{% endblock %}
+{% block topbar_title %}Device{% endblock %}
 {% block content %}
 
 <div class="pagehead">
@@ -11,11 +11,24 @@
 </div>
 
 {% if status == 'overdue' %}
-<div class="flash error" style="margin: 10px 16px;"><strong>Hydrostatic test overdue.</strong> {{ status_msg }}</div>
+<div class="banner rejected">
+  <span class="b-ico">!</span>
+  <div class="b-body">
+    <div class="b-title">Hydrostatic test overdue</div>
+    <div class="b-sub">{{ status_msg }}</div>
+  </div>
+</div>
 {% elif status == 'due-soon' %}
-<div class="flash" style="margin: 10px 16px; background: var(--warn-bg); color: var(--warn);"><strong>Service due soon.</strong> {{ status_msg }}</div>
+<div class="banner pending">
+  <span class="b-ico">!</span>
+  <div class="b-body">
+    <div class="b-title">Service due soon</div>
+    <div class="b-sub">{{ status_msg }}</div>
+  </div>
+</div>
 {% endif %}
 
+<div class="card-title">Details</div>
 <div class="card">
   <div class="row"><div class="meta"><div class="title">Type</div><div class="sub">{{ device.extinguisher_type or '-' }}</div></div></div>
   <div class="row"><div class="meta"><div class="title">Size</div><div class="sub">{{ device.extinguisher_size or '-' }}</div></div></div>
@@ -28,24 +41,28 @@
   <div class="row"><div class="meta"><div class="title">Next due</div><div class="sub">{{ device.next_due|fmtdate }}</div></div></div>
 </div>
 
-<div class="card-title">QR Code</div>
-<div class="card" style="padding: 18px; text-align: center;">
-  <img src="{{ url_for('device_qr_png', device_id=device.id) }}"
-       alt="QR code"
-       style="width: 200px; height: 200px; image-rendering: pixelated;">
-  <div style="font-size: 12px; color: var(--ink-3); margin-top: 8px;">
-    Scan with any phone camera to open this device's profile.
+<div class="card-title">QR code</div>
+<div class="card">
+  <div style="padding: 20px; text-align: center;">
+    <img src="{{ url_for('device_qr_png', device_id=device.id) }}"
+         alt="QR code"
+         style="width: 180px; height: 180px; border-radius: 12px; image-rendering: pixelated;">
+    <div style="font-size: var(--t-footnote); color: var(--label-3); margin-top: 10px;">
+      Scan with any phone camera to open this device's profile.
+    </div>
+    <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('device_qr_label', device_id=device.id) }}" target="_blank" class="btn small">Print label</a>
+      <a href="{{ url_for('device_qr_png', device_id=device.id) }}" download class="btn ghost small">Download PNG</a>
+      <form method="post" action="{{ url_for('regen_qr', device_id=device.id) }}">
+        <button type="submit" class="btn ghost small">Regenerate</button>
+      </form>
+    </div>
   </div>
-  <form method="post" action="{{ url_for('regen_qr', device_id=device.id) }}" style="margin-top: 12px;">
-    <button type="submit" class="btn ghost" style="font-size: 12px; padding: 8px 14px; min-height: 0;">Regenerate QR</button>
-    <a href="{{ url_for('device_qr_png', device_id=device.id) }}" download
-       class="btn ghost" style="font-size: 12px; padding: 8px 14px; min-height: 0; margin-left: 6px;">Download PNG</a>
-  </form>
 </div>
 
-<div class="card-title">Edit details</div>
+<div class="card-title">Edit</div>
 <form method="post" action="{{ url_for('edit_device', device_id=device.id) }}">
-  <div class="card" style="padding: 6px 0;">
+  <div class="card">
     <div class="field"><label>Type</label>
       <select name="extinguisher_type">
         {% for t in ['ABC Dry Chemical','Class K (Wet Chemical)','CO2','Water','Foam (AFFF)','Halotron','Other'] %}
@@ -65,7 +82,7 @@
     </div>
     <div class="field"><label>Location</label><input type="text" name="location" value="{{ device.location or '' }}"></div>
     <div class="field"><label>Model</label><input type="text" name="model" value="{{ device.model or '' }}"></div>
-    <div class="field"><label>Serial #</label><input type="text" name="serial" value="{{ device.serial or '' }}"></div>
+    <div class="field"><label>Serial</label><input type="text" name="serial" value="{{ device.serial or '' }}"></div>
     <div class="field"><label>Barcode / asset tag</label><input type="text" name="barcode" value="{{ device.barcode or '' }}"></div>
     <div class="field"><label>Notes</label><textarea name="notes" rows="3">{{ device.notes or '' }}</textarea></div>
   </div>
@@ -75,12 +92,12 @@
 </form>
 
 {% if photos %}
-<div class="card-title">Photos ({{ photos|length }})</div>
-<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; padding: 0 16px 16px;">
+<div class="card-title">Photos &middot; {{ photos|length }}</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; padding: 0 16px 16px;">
   {% for p in photos %}
   <a href="{{ url_for('uploaded_file', inspection_id=p.inspection_id, filename=p.filename) }}" target="_blank">
     <img src="{{ url_for('uploaded_file', inspection_id=p.inspection_id, filename=p.filename) }}"
-         style="width: 100%; height: 110px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);">
+         style="width: 100%; height: 110px; object-fit: cover; border-radius: 10px;">
   </a>
   {% endfor %}
 </div>
@@ -95,7 +112,14 @@
       <div class="title">{{ TEMPLATES[h.template_slug].name if h.template_slug in TEMPLATES else h.template_slug }}</div>
       <div class="sub">{{ h.inspector_name }} &middot; {{ (h.completed_at or h.started_at)|fmtdate }}</div>
     </div>
-    <span class="pill {{ h.status }}">{{ h.status.replace('_',' ') }}</span>
+    {% if h.status == 'completed' %}
+      {% if h.approval_status == 'approved' %}<span class="pill approved">Approved</span>
+      {% elif h.approval_status == 'rejected' %}<span class="pill rejected">Rejected</span>
+      {% else %}<span class="pill pending">Pending</span>{% endif %}
+    {% else %}
+      <span class="pill in_progress">Active</span>
+    {% endif %}
+    <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}
 </div>

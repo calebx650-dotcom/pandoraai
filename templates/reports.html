@@ -1,27 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Reports · IGH fireNspec{% endblock %}
+{% block title %}Reports - Spectofire{% endblock %}
 {% block topbar_title %}Reports{% endblock %}
 {% block content %}
 <div class="pagehead">
-  <h2>Completed reports</h2>
-  <p>{{ inspections|length }} on file</p>
+  <h2>Reports</h2>
+  <p>{{ inspections|length }} completed</p>
 </div>
 
 {% if inspections %}
 <div class="card">
   {% for i in inspections %}
   <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
-    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon }}</span>
     <div class="meta">
-      <div class="title">{{ i.customer_name }} — {{ i.site_name }}</div>
-      <div class="sub">{{ TEMPLATES[i.template_slug].name }} · {{ i.completed_at|fmtdate }}</div>
-      <div class="sub" style="margin-top: 2px;">{{ i.inspector_name }}</div>
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }} &middot; {{ i.completed_at|fmtdate }}</div>
+      <div class="sub">{{ i.inspector_name }}</div>
     </div>
-    <span class="chev">›</span>
+    {% if i.approval_status == 'approved' %}<span class="pill approved">Approved</span>
+    {% elif i.approval_status == 'rejected' %}<span class="pill rejected">Rejected</span>
+    {% else %}<span class="pill pending">Pending</span>{% endif %}
+    <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}
 </div>
 {% else %}
-<div class="card"><div class="empty"><div class="big">📄</div>No completed reports yet.</div></div>
+<div class="card"><div class="empty"><div class="big">REPORTS</div>No completed reports yet.</div></div>
 {% endif %}
 {% endblock %}

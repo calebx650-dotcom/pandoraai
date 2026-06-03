@@ -1,7 +1,57 @@
 {% extends "base.html" %}
 {% block title %}Inspection Report - Spectofire{% endblock %}
-{% block topbar_title %}Inspection Report{% endblock %}
+{% block topbar_title %}Report{% endblock %}
 {% block content %}
+
+{# Approval status banner (no-print so it doesn't leak into the customer PDF) #}
+<div class="no-print">
+  {% if insp.approval_status == 'approved' %}
+    <div class="banner approved">
+      <span class="b-ico">OK</span>
+      <div class="b-body">
+        <div class="b-title">Approved &middot; visible to customer</div>
+        <div class="b-sub">Approved {{ insp.approved_at|relative if insp.approved_at else 'recently' }}.</div>
+      </div>
+    </div>
+  {% elif insp.approval_status == 'rejected' %}
+    <div class="banner rejected">
+      <span class="b-ico">!</span>
+      <div class="b-body">
+        <div class="b-title">Sent back for revision</div>
+        <div class="b-sub">{{ insp.rejection_reason or 'Please fix the noted items and resubmit.' }}</div>
+      </div>
+    </div>
+  {% elif insp.approval_status == 'pending' and insp.status == 'completed' %}
+    <div class="banner pending">
+      <span class="b-ico">!</span>
+      <div class="b-body">
+        <div class="b-title">Pending admin approval</div>
+        <div class="b-sub">Customer cannot see this report until approved.</div>
+      </div>
+    </div>
+    {% if current_role == 'admin' %}
+    <div class="card no-print" style="margin: 0 0 8px;">
+      <div class="approve-actions">
+        <form method="post" action="{{ url_for('approve_inspection', inspection_id=insp.id) }}">
+          <button type="submit" class="btn success full">Approve</button>
+        </form>
+        <button type="button" class="btn ghost"
+                onclick="document.getElementById('top-reject').style.display='block'; this.style.display='none';">Reject</button>
+      </div>
+      <form method="post" action="{{ url_for('reject_inspection', inspection_id=insp.id) }}"
+            id="top-reject" class="reject-form">
+        <label>Reason for revision</label>
+        <textarea name="rejection_reason" rows="2" required></textarea>
+        <div class="reject-btns">
+          <button type="submit" class="btn danger">Send back</button>
+          <button type="button" class="btn ghost"
+                  onclick="document.getElementById('top-reject').style.display='none'">Cancel</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+  {% endif %}
+</div>
 
 <div class="report">
 

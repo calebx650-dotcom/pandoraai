@@ -4,10 +4,10 @@
 {% block content %}
 <div class="pagehead"><h2>Recurring Schedules</h2></div>
 
-<details style="margin: 0 16px 16px;">
-  <summary style="padding: 12px 0; font-weight:600; color:var(--igh-orange); cursor:pointer;">+ Add schedule</summary>
-  <form method="post" action="{{ url_for('admin_schedule_new') }}" style="padding-top:6px;">
-    <div class="card" style="padding:6px 0;">
+<details class="collapse-form">
+  <summary>+ Add schedule</summary>
+  <form method="post" action="{{ url_for('admin_schedule_new') }}">
+    <div class="card">
       <div class="field">
         <label>Site</label>
         <select name="site_id" required>
@@ -42,7 +42,7 @@
         <input type="text" name="notes" placeholder="Optional">
       </div>
     </div>
-    <button type="submit" class="btn" style="margin-top:8px;">Add schedule</button>
+    <div class="btn-row"><button type="submit" class="btn">Add schedule</button></div>
   </form>
 </details>
 
@@ -61,7 +61,7 @@
       {% if s.notes %}<div class="sub" style="font-style:italic;">{{ s.notes }}</div>{% endif %}
     </div>
     <form method="post" action="{{ url_for('admin_schedule_delete', sched_id=s.id) }}">
-      <button type="submit" class="btn secondary" style="font-size:12px; padding:5px 10px;"
+      <button type="submit" class="btn secondary small"
               onclick="return confirm('Remove this schedule?')">Remove</button>
     </form>
   </div>

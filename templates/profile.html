@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}More - Spectofire{% endblock %}
+{% block topbar_title %}More{% endblock %}
+{% block content %}
+
+<div class="pagehead">
+  <h2>Account</h2>
+</div>
+
+<div class="card">
+  <div class="row">
+    <span class="avatar">{{ current_user.split(' ')[0][0]|upper }}{{ (current_user.split(' ')[1][0] if current_user.split(' ')|length > 1 else '')|upper }}</span>
+    <div class="meta">
+      <div class="title">{{ current_user }}</div>
+      <div class="sub" style="text-transform: capitalize;">{{ current_role }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-title">Inspector tools</div>
+<div class="card">
+  <a class="row clickable" href="{{ url_for('deficiencies_list') }}">
+    <span class="icon" style="background: var(--warn-bg); color: var(--warn-ink);">ISS</span>
+    <div class="meta">
+      <div class="title">Open issues</div>
+      <div class="sub">{{ open_defs }} deficienc{{ 'y' if open_defs == 1 else 'ies' }} awaiting resolution</div>
+    </div>
+    {% if open_defs %}<span class="pill due-soon">{{ open_defs }}</span>{% endif %}
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('new_inspection') }}">
+    <span class="icon" style="background: var(--tint-soft); color: var(--tint);">NEW</span>
+    <div class="meta">
+      <div class="title">Start new inspection</div>
+      <div class="sub">Pick site, template, capture GPS</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+</div>
+
+{% if current_role == 'admin' %}
+<div class="card-title">Admin</div>
+<div class="card">
+  <a class="row clickable" href="{{ url_for('admin_approvals') }}">
+    <span class="icon" style="background: var(--warn-bg); color: var(--warn-ink);">APP</span>
+    <div class="meta">
+      <div class="title">Approval queue</div>
+      <div class="sub">Review completed inspections before clients see them</div>
+    </div>
+    {% if pending_approvals %}<span class="pill pending">{{ pending_approvals }}</span>{% endif %}
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_users') }}">
+    <span class="icon">USR</span>
+    <div class="meta">
+      <div class="title">Users</div>
+      <div class="sub">Manage inspectors and admins</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_schedules') }}">
+    <span class="icon">SCH</span>
+    <div class="meta">
+      <div class="title">Schedules</div>
+      <div class="sub">Recurring inspection cadences per site</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_invoices') }}">
+    <span class="icon">INV</span>
+    <div class="meta">
+      <div class="title">Invoices</div>
+      <div class="sub">Draft, sent, and paid lifecycle</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_quickbooks') }}">
+    <span class="icon">QBO</span>
+    <div class="meta">
+      <div class="title">QuickBooks Online</div>
+      <div class="sub">Connect invoice sync</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_templates') }}">
+    <span class="icon">TPL</span>
+    <div class="meta">
+      <div class="title">Templates</div>
+      <div class="sub">Edit checklist JSON for each inspection type</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('admin_events') }}">
+    <span class="icon">LOG</span>
+    <div class="meta">
+      <div class="title">Activity log</div>
+      <div class="sub">Audit trail of system events</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+</div>
+
+<div class="card-title">Exports</div>
+<div class="card">
+  <a class="row clickable" href="{{ url_for('export_sites_csv') }}">
+    <div class="meta">
+      <div class="title">Sites CSV</div>
+      <div class="sub">All customer sites</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('export_inspections_csv') }}">
+    <div class="meta">
+      <div class="title">Inspections CSV</div>
+      <div class="sub">All inspection records</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  <a class="row clickable" href="{{ url_for('export_deficiencies_csv') }}">
+    <div class="meta">
+      <div class="title">Deficiencies CSV</div>
+      <div class="sub">All open and resolved issues</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+</div>
+{% endif %}
+
+<div class="card-title">Session</div>
+<div class="card">
+  <a class="row clickable" href="{{ url_for('logout') }}">
+    <div class="meta">
+      <div class="title" style="color: var(--fail-ink);">Sign out</div>
+      <div class="sub">End your session on this device</div>
+    </div>
+    <span class="chev">&rsaquo;</span>
+  </a>
+</div>
+
+<div style="padding: 24px 20px 8px; text-align: center; font-size: var(--t-caption); color: var(--label-3);">
+  Spectofire by IGH Health, Fire &amp; Safety<br>
+  (817) 809-8677
+</div>
+{% endblock %}

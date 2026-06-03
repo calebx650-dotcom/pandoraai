@@ -16,7 +16,7 @@
     </div>
     <form method="post" action="{{ url_for('admin_template_delete', slug=slug) }}"
           onsubmit="return confirm('Remove {{ slug }}?');">
-      <button type="submit" class="btn ghost" style="padding: 8px 12px; min-height: 0;">Remove</button>
+      <button type="submit" class="btn ghost small">Remove</button>
     </form>
   </div>
   {% endfor %}
@@ -24,14 +24,14 @@
 
 <div class="card-title">Add or update a template</div>
 <form method="post">
-  <div class="card" style="padding: 6px 0;">
+  <div class="card">
     <div class="field">
       <label>Slug (lowercase, no spaces)</label>
       <input type="text" name="slug" placeholder="my_custom_check" required>
     </div>
     <div class="field">
       <label>Template JSON</label>
-      <textarea name="body" rows="14" style="font-family: monospace; font-size: 13px;"
+      <textarea name="body" rows="14" class="mono"
                 placeholder='{
   "name": "My Custom Check",
   "icon": "MC",
@@ -48,7 +48,7 @@
       <div class="hint">Item types: <code>check</code> (Pass/Fail/NA), <code>text</code>, <code>number</code>.</div>
     </div>
   </div>
-  <div style="padding: 16px;">
+  <div class="btn-row" style="padding-top:8px;">
     <button type="submit" class="btn full">Save template</button>
   </div>
 </form>

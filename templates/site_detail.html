@@ -9,67 +9,64 @@
     {% if site.contact_name %}{{ site.contact_name }}{% if site.contact_phone %} &middot; <a href="tel:{{ site.contact_phone }}">{{ site.contact_phone }}</a>{% endif %}{% endif %}
     {% if site.contact_email %}<br><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% endif %}
   </p>
-  {% if site.notes %}<p style="margin-top:6px; font-style: italic;">{{ site.notes }}</p>{% endif %}
+  {% if site.notes %}<p style="margin-top: 8px; color: var(--label-2); font-size: var(--t-subhead);">{{ site.notes }}</p>{% endif %}
 </div>
 
-<div style="padding: 0 16px 8px; display:flex; gap: 8px; flex-wrap: wrap;">
-  <a href="{{ url_for('new_inspection') }}?site_id={{ site.id }}" class="btn">+ New inspection</a>
+<div style="padding: 4px 16px 8px; display:flex; gap: 8px; flex-wrap: wrap;">
+  <a href="{{ url_for('new_inspection') }}?site_id={{ site.id }}" class="btn">Start inspection</a>
+  <button type="button" class="btn ghost" data-scan-trigger data-scan-mode="navigate">Scan QR</button>
   {% if current_role == 'admin' %}
-  <button onclick="document.getElementById('edit-site-form').style.display='block';this.style.display='none'" class="btn secondary">Edit site</button>
+  <button onclick="document.getElementById('edit-site-form').style.display='block';this.style.display='none'" class="btn ghost">Edit site</button>
   {% endif %}
 </div>
 
 {% if current_role == 'admin' %}
 <div id="edit-site-form" style="display:none; padding: 0 16px 16px;">
   <form method="post" action="{{ url_for('edit_site', site_id=site.id) }}">
-    <div class="card" style="padding: 6px 0;">
+    <div class="card">
       <div class="field"><label>Customer name</label><input type="text" name="customer_name" value="{{ site.customer_name }}" required></div>
-      <div class="field"><label>Site / location name</label><input type="text" name="site_name" value="{{ site.site_name }}" required></div>
+      <div class="field"><label>Site name</label><input type="text" name="site_name" value="{{ site.site_name }}" required></div>
       <div class="field"><label>Address</label><input type="text" name="address" value="{{ site.address or '' }}"></div>
       <div class="field"><label>Contact name</label><input type="text" name="contact_name" value="{{ site.contact_name or '' }}"></div>
       <div class="field"><label>Contact phone</label><input type="tel" name="contact_phone" value="{{ site.contact_phone or '' }}"></div>
       <div class="field"><label>Contact email</label><input type="email" name="contact_email" value="{{ site.contact_email or '' }}"></div>
       <div class="field"><label>Notes</label><textarea name="notes" rows="2">{{ site.notes or '' }}</textarea></div>
     </div>
-    <button type="submit" class="btn full" style="margin-top: 8px;">Save changes</button>
+    <div style="padding: 16px;"><button type="submit" class="btn full">Save changes</button></div>
   </form>
 </div>
 
-<!-- Customer portal link -->
-<div style="padding: 0 16px 12px;">
-  <div class="card-title">Customer portal</div>
-  <div class="card" style="padding: 12px 16px;">
+<div class="card-title">Customer portal</div>
+<div class="card">
+  <div style="padding: 14px 16px;">
     {% if site.portal_token %}
-    <p style="font-size: 13px; word-break: break-all; color: var(--ink-2);">
+    <p style="font-size: var(--t-footnote); color: var(--label-3); word-break: break-all; margin: 0 0 10px;">
       {{ request.url_root.rstrip('/') }}/portal/{{ site.portal_token }}
     </p>
-    <div style="display: flex; gap: 8px; margin-top: 8px;">
-      <form method="post" action="{{ url_for('regen_portal_token', site_id=site.id) }}" style="display:inline;">
-        <button type="submit" class="btn secondary" style="font-size:13px;">Regenerate link</button>
-      </form>
-    </div>
+    <form method="post" action="{{ url_for('regen_portal_token', site_id=site.id) }}">
+      <button type="submit" class="btn ghost small">Regenerate link</button>
+    </form>
     {% else %}
     <form method="post" action="{{ url_for('regen_portal_token', site_id=site.id) }}">
-      <button type="submit" class="btn secondary">Generate customer portal link</button>
+      <button type="submit" class="btn secondary">Generate portal link</button>
     </form>
     {% endif %}
   </div>
 </div>
 {% endif %}
 
-<div class="card-title">Devices ({{ devices|length }})</div>
+<div class="card-title">Devices &middot; {{ devices|length }}</div>
 {% if devices %}
 <div class="card">
   {% for d in devices %}
-  <a class="row clickable"
-     href="{% if d.device_type == 'extinguisher' %}{{ url_for('device_detail', device_id=d.id) }}{% else %}#{% endif %}">
-    <div class="icon">
+  <a class="row clickable" href="{{ url_for('device_detail', device_id=d.id) }}">
+    <span class="icon">
       {%- if d.device_type == 'extinguisher' %}FE
       {%- elif d.device_type == 'fire_alarm_panel' %}FA
       {%- elif d.device_type == 'kitchen_suppression' %}KS
       {%- elif d.device_type == 'emergency_light' %}EL
       {%- else %}DV{% endif -%}
-    </div>
+    </span>
     <div class="meta">
       <div class="title">{{ d.barcode or d.serial or d.device_type }}</div>
       <div class="sub">
@@ -77,12 +74,10 @@
         {% else %}{{ d.model or d.device_type }}{% endif %}
         &middot; {{ d.location or '-' }}
       </div>
-      <div class="sub" style="margin-top:2px;">
-        Last: {{ d.last_inspected|fmtdate }} &middot; Next: {{ d.next_due|fmtdate }}
-      </div>
+      <div class="sub">Last {{ d.last_inspected|fmtdate }} &middot; Next {{ d.next_due|fmtdate }}</div>
     </div>
-    {% if d.exp_status == 'overdue' %}<span class="pill overdue">Hydro overdue</span>
-    {% elif d.exp_status == 'due-soon' %}<span class="pill due-soon">Hydro due soon</span>
+    {% if d.exp_status == 'overdue' %}<span class="pill overdue">Hydro</span>
+    {% elif d.exp_status == 'due-soon' %}<span class="pill due-soon">Hydro</span>
     {% endif %}
     <span class="chev">&rsaquo;</span>
   </a>
@@ -93,22 +88,22 @@
 {% endif %}
 
 <details style="margin: 6px 16px 4px;">
-  <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-orange); cursor: pointer;">+ Import devices from CSV</summary>
-  <form method="post" action="{{ url_for('import_devices', site_id=site.id) }}" enctype="multipart/form-data" style="padding-top: 4px;">
-    <div class="card" style="padding: 10px 0;">
+  <summary style="padding: 12px 4px; font-weight: 600; color: var(--tint); cursor: pointer; font-size: var(--t-subhead);">Import devices from CSV</summary>
+  <form method="post" action="{{ url_for('import_devices', site_id=site.id) }}" enctype="multipart/form-data">
+    <div class="card">
       <div class="field">
         <label>CSV file (columns: device_type, barcode, model, serial, location)</label>
         <input type="file" name="csvfile" accept=".csv,text/csv" required>
       </div>
     </div>
-    <button type="submit" class="btn secondary" style="margin-top: 6px;">Import</button>
+    <div style="padding: 12px 0;"><button type="submit" class="btn ghost">Import</button></div>
   </form>
 </details>
 
 <details style="margin: 0 16px 16px;">
-  <summary style="padding: 12px 0; font-weight: 600; color: var(--igh-orange); cursor: pointer;">+ Add device</summary>
-  <form method="post" action="{{ url_for('new_device', site_id=site.id) }}" style="padding-top: 6px;">
-    <div class="card" style="padding: 6px 0;">
+  <summary style="padding: 12px 4px; font-weight: 600; color: var(--tint); cursor: pointer; font-size: var(--t-subhead);">Add device manually</summary>
+  <form method="post" action="{{ url_for('new_device', site_id=site.id) }}">
+    <div class="card">
       <div class="field">
         <label>Type</label>
         <select name="device_type" required>
@@ -125,9 +120,7 @@
       <div class="field"><label>Serial</label><input type="text" name="serial"></div>
       <div class="field"><label>Location</label><input type="text" name="location"></div>
     </div>
-    <div style="padding: 12px 0;">
-      <button type="submit" class="btn full secondary">Save device</button>
-    </div>
+    <div style="padding: 12px 0;"><button type="submit" class="btn full secondary">Save device</button></div>
   </form>
 </details>
 
@@ -136,12 +129,18 @@
 <div class="card">
   {% for i in inspections %}
   <a class="row clickable" href="{% if i.status == 'completed' %}{{ url_for('report', inspection_id=i.id) }}{% else %}{{ url_for('inspection', inspection_id=i.id) }}{% endif %}">
-    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon }}</span>
     <div class="meta">
       <div class="title">{{ TEMPLATES[i.template_slug].name }}</div>
       <div class="sub">{{ i.inspector_name }} &middot; {{ (i.completed_at or i.started_at)|fmtdate }}</div>
     </div>
-    <span class="pill {{ i.status }}">{{ i.status.replace('_',' ') }}</span>
+    {% if i.status == 'completed' %}
+      {% if i.approval_status == 'approved' %}<span class="pill approved">Approved</span>
+      {% elif i.approval_status == 'rejected' %}<span class="pill rejected">Rejected</span>
+      {% else %}<span class="pill pending">Pending</span>{% endif %}
+    {% else %}
+      <span class="pill in_progress">Active</span>
+    {% endif %}
     <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}

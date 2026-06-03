@@ -66,9 +66,14 @@ CREATE TABLE IF NOT EXISTS inspections (
     customer_email TEXT,
     notes TEXT,
     device_id INTEGER,
+    approval_status TEXT NOT NULL DEFAULT 'pending',
+    approved_by INTEGER,
+    approved_at TEXT,
+    rejection_reason TEXT,
     FOREIGN KEY(site_id) REFERENCES sites(id),
     FOREIGN KEY(inspector_id) REFERENCES users(id),
-    FOREIGN KEY(device_id) REFERENCES devices(id)
+    FOREIGN KEY(device_id) REFERENCES devices(id),
+    FOREIGN KEY(approved_by) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS inspection_items (
@@ -142,6 +147,7 @@ CREATE TABLE IF NOT EXISTS deficiencies (
     created_by INTEGER,
     created_at TEXT NOT NULL,
     resolved_at TEXT,
+    approval_status TEXT NOT NULL DEFAULT 'pending',
     FOREIGN KEY(inspection_id) REFERENCES inspections(id),
     FOREIGN KEY(site_id) REFERENCES sites(id),
     FOREIGN KEY(created_by) REFERENCES users(id)
@@ -195,6 +201,12 @@ MIGRATIONS = [
     ("sites", "contact_email", "TEXT"),
     ("sites", "portal_token", "TEXT"),
     ("users", "active", "INTEGER NOT NULL DEFAULT 1"),
+    # --- Approval workflow (pending | approved | rejected | revisions_requested) ---
+    ("inspections", "approval_status", "TEXT NOT NULL DEFAULT 'pending'"),
+    ("inspections", "approved_by", "INTEGER"),
+    ("inspections", "approved_at", "TEXT"),
+    ("inspections", "rejection_reason", "TEXT"),
+    ("deficiencies", "approval_status", "TEXT NOT NULL DEFAULT 'pending'"),
 ]
 
 
@@ -229,6 +241,17 @@ def init_db():
     for r in rows:
         conn.execute("UPDATE devices SET qr_token=? WHERE id=?",
                      (secrets.token_urlsafe(12), r["id"]))
+    # Backfill approval_status — any null rows get 'pending'. This is safe because
+    # the approval gate withholds 'pending' rows from clients; admins can then
+    # approve historical work via /admin/approvals.
+    if _column_exists(conn, "inspections", "approval_status"):
+        conn.execute(
+            "UPDATE inspections SET approval_status='pending' WHERE approval_status IS NULL"
+        )
+    if _column_exists(conn, "deficiencies", "approval_status"):
+        conn.execute(
+            "UPDATE deficiencies SET approval_status='pending' WHERE approval_status IS NULL"
+        )
     conn.commit()
     if fresh:
         seed(conn)
@@ -353,15 +376,18 @@ def seed(conn):
          "Walkthrough at 1710 Couch Dr."),
     )
 
-    # A completed fire-alarm inspection
+    # A completed fire-alarm inspection (pre-approved so demo portal has data to show)
     completed_at = (datetime.utcnow() - timedelta(days=2)).isoformat(timespec="seconds")
     started_earlier = (datetime.utcnow() - timedelta(days=2, hours=1)).isoformat(timespec="seconds")
+    approved_at = (datetime.utcnow() - timedelta(days=1, hours=22)).isoformat(timespec="seconds")
     conn.execute(
         """INSERT INTO inspections (site_id, inspector_id, template_slug, status, started_at, completed_at,
-                                    gps_lat, gps_lng, inspector_signature, customer_signature, customer_email)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                                    gps_lat, gps_lng, inspector_signature, customer_signature, customer_email,
+                                    approval_status, approved_by, approved_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (3, 1, "fire_alarm", "completed", started_earlier, completed_at,
-         32.5887, -96.9561, "Brandon Russ", "Coach Daniels", "facilities@chisd.example"),
+         32.5887, -96.9561, "Brandon Russ", "Coach Daniels", "facilities@chisd.example",
+         "approved", 2, approved_at),
     )
 
     # An active firewatch shift at Excel 4 Construction

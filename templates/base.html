@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#13334A">
+  <meta name="theme-color" content="#F2F2F7">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Spectofire">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/logo.svg">
@@ -20,7 +20,7 @@
     <img src="/static/logo.svg" alt="" class="logo">
     <div>
       <h1>{% block topbar_title %}Spectofire{% endblock %}</h1>
-      <div class="sub">IGH HEALTH FIRE SAFETY</div>
+      <div class="sub">IGH Health Fire Safety</div>
     </div>
     <div class="spacer"></div>
     <div class="conn"><span class="dot"></span><span class="txt">Online</span></div>
@@ -34,18 +34,85 @@
   {% block content %}{% endblock %}
   {% if request.endpoint != 'login' %}
   <nav class="tabbar">
-    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}"><span class="ico">Home</span></a>
-    <a href="{{ url_for('new_inspection') }}" class="{% if request.endpoint in ['new_inspection','inspection'] %}active{% endif %}"><span class="ico">Inspect</span></a>
-    <a href="{{ url_for('sites') }}" class="{% if request.endpoint in ['sites','site_detail','new_site'] %}active{% endif %}"><span class="ico">Sites</span></a>
-    <a href="{{ url_for('reports') }}" class="{% if request.endpoint in ['reports','report'] %}active{% endif %}"><span class="ico">Reports</span></a>
-    {% if current_role == 'admin' %}
-    <a href="{{ url_for('admin_events') }}" class="{% if request.endpoint and 'admin' in request.endpoint %}active{% endif %}"><span class="ico">Admin</span></a>
-    {% endif %}
-    <a href="{{ url_for('deficiencies_list') }}" class="{% if request.endpoint == 'deficiencies_list' %}active{% endif %}"><span class="ico">Issues</span></a>
-    <a href="{{ url_for('logout') }}"><span class="ico">Sign out</span></a>
+    {# SF-style SVG icons. Filled when active for stronger iOS feel. #}
+    <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <span class="ico" aria-hidden="true">
+        {% if request.endpoint == 'dashboard' %}
+        <svg viewBox="0 0 24 24"><path class="fill" d="M11.3 2.5a1 1 0 0 1 1.4 0l8.6 8.6a1 1 0 0 1-.7 1.7H20v7a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-7H2.4a1 1 0 0 1-.7-1.7l8.6-8.6Z"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24"><path class="stroke" d="M3.5 11.5 12 3l8.5 8.5M5.5 10v9.5h5v-6h3v6h5V10"/></svg>
+        {% endif %}
+      </span>
+      Home
+    </a>
+    <a href="{{ url_for('sites') }}" class="{% if request.endpoint in ['sites','site_detail','new_site'] %}active{% endif %}">
+      <span class="ico" aria-hidden="true">
+        {% if request.endpoint in ['sites','site_detail','new_site'] %}
+        <svg viewBox="0 0 24 24"><path class="fill" d="M4 21V9.4a1 1 0 0 1 .4-.8l7-5.2a1 1 0 0 1 1.2 0l7 5.2a1 1 0 0 1 .4.8V21a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1Z"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24"><path class="stroke" d="M4.5 21V9.7L12 4.2l7.5 5.5V21M9.5 21v-6h5v6"/></svg>
+        {% endif %}
+      </span>
+      Sites
+    </a>
+    <a href="{{ url_for('new_inspection') }}" class="{% if request.endpoint in ['new_inspection','inspection'] %}active{% endif %}">
+      <span class="ico" aria-hidden="true">
+        {% if request.endpoint in ['new_inspection','inspection'] %}
+        <svg viewBox="0 0 24 24"><path class="fill" d="M11 2a9 9 0 1 0 5.7 16l4 4 1.6-1.6-4-4A9 9 0 0 0 11 2Zm0 3a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24"><circle class="stroke" cx="11" cy="11" r="7"/><path class="stroke" d="m20.5 20.5-4-4"/></svg>
+        {% endif %}
+      </span>
+      Inspect
+    </a>
+    <a href="{{ url_for('reports') }}" class="{% if request.endpoint in ['reports','report'] %}active{% endif %}">
+      <span class="ico" aria-hidden="true">
+        {% if request.endpoint in ['reports','report'] %}
+        <svg viewBox="0 0 24 24"><path class="fill" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm6 1.5V8h4.5L13 3.5ZM8.5 12h7v1.5h-7zm0 3h7v1.5h-7zm0 3h5v1.5h-5z"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24"><path class="stroke" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path class="stroke" d="M14 3v5h5M8.5 13h7M8.5 16h7M8.5 19h4"/></svg>
+        {% endif %}
+      </span>
+      Reports
+    </a>
+    <a href="{{ url_for('profile') }}" class="{% if request.endpoint in ['profile','admin_events','admin_users','admin_user_new','admin_user_edit','admin_schedules','admin_invoices','admin_quickbooks','admin_templates','admin_approvals','deficiencies_list'] %}active{% endif %}">
+      <span class="ico" aria-hidden="true">
+        {% if request.endpoint in ['profile','admin_events','admin_users','admin_user_new','admin_user_edit','admin_schedules','admin_invoices','admin_quickbooks','admin_templates','admin_approvals','deficiencies_list'] %}
+        <svg viewBox="0 0 24 24"><circle class="fill" cx="12" cy="8" r="4"/><path class="fill" d="M4 20.5a8 8 0 0 1 16 0V21a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-.5Z"/></svg>
+        {% else %}
+        <svg viewBox="0 0 24 24"><circle class="stroke" cx="12" cy="8" r="3.5"/><path class="stroke" d="M5 20.5a7 7 0 0 1 14 0"/></svg>
+        {% endif %}
+      </span>
+      More
+    </a>
   </nav>
   {% endif %}
 </div>
+
+<!-- ========= QR / barcode scanner overlay ========= -->
+<div id="scanner-modal" class="scanner-modal" aria-hidden="true">
+  <div class="scanner-backdrop" data-scanner-close></div>
+  <div class="scanner-sheet" role="dialog" aria-modal="true" aria-label="Scan QR code">
+    <header class="scanner-header">
+      <div class="scanner-title">Scan QR or barcode</div>
+      <button type="button" class="scanner-close" data-scanner-close aria-label="Close">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path fill="currentColor" d="M12 10.6 6.7 5.3 5.3 6.7 10.6 12l-5.3 5.3 1.4 1.4L12 13.4l5.3 5.3 1.4-1.4L13.4 12l5.3-5.3-1.4-1.4Z"/>
+        </svg>
+      </button>
+    </header>
+    <div class="scanner-viewport">
+      <div id="scanner-reader"></div>
+      <div class="scanner-cutout" aria-hidden="true">
+        <span class="cnr tl"></span><span class="cnr tr"></span>
+        <span class="cnr bl"></span><span class="cnr br"></span>
+      </div>
+    </div>
+    <div class="scanner-status" id="scanner-status">Point camera at a QR code or barcode</div>
+  </div>
+</div>
+
+<!-- html5-qrcode (loaded lazily by app.js the first time scanner opens) -->
 <script src="/static/app.js"></script>
 </body>
 </html>

@@ -1,18 +1,27 @@
 {% extends "base.html" %}
-{% block title %}New inspection · IGH fireNspec{% endblock %}
+{% block title %}New inspection - Spectofire{% endblock %}
 {% block topbar_title %}New Inspection{% endblock %}
 {% block content %}
-<div class="pagehead"><h2>Start an inspection</h2><p>Pick the site and template to begin.</p></div>
+<div class="pagehead">
+  <h2>Start inspection</h2>
+  <p>Pick the site and template to begin, or scan a device's QR to jump straight to its record.</p>
+</div>
+
+<div style="padding: 0 16px 12px;">
+  <button type="button" class="btn ghost full" data-scan-trigger data-scan-mode="navigate">
+    Scan device QR
+  </button>
+</div>
 
 <form method="post">
-  <div class="card" style="padding: 6px 0;">
+  <div class="card">
     <div class="field">
       <label>Site</label>
       <select name="site_id" required>
-        <option value="" disabled {% if not request.args.get('site_id') %}selected{% endif %}>Choose a site…</option>
+        <option value="" disabled {% if not request.args.get('site_id') %}selected{% endif %}>Choose a site</option>
         {% for s in sites %}
         <option value="{{ s.id }}" {% if request.args.get('site_id')|int == s.id %}selected{% endif %}>
-          {{ s.customer_name }} — {{ s.site_name }}
+          {{ s.customer_name }} - {{ s.site_name }}
         </option>
         {% endfor %}
       </select>
@@ -23,17 +32,17 @@
       <label>Template</label>
       <select name="template_slug" required>
         {% for slug, t in TEMPLATES.items() %}
-        <option value="{{ slug }}">{{ t.icon }} {{ t.name }}</option>
+        <option value="{{ slug }}">{{ t.name }}</option>
         {% endfor %}
       </select>
     </div>
 
     <div class="field">
-      <label>GPS (optional but recommended)</label>
-      <button type="button" id="gps-btn" class="btn ghost full">📍 Tap to capture location</button>
+      <label>Location</label>
+      <button type="button" id="gps-btn" class="btn ghost full">Capture GPS location</button>
       <input type="hidden" id="gps_lat" name="gps_lat">
       <input type="hidden" id="gps_lng" name="gps_lng">
-      <div class="hint">Stored on the report for proof of presence on-site.</div>
+      <div class="hint">Recorded as proof of presence on-site.</div>
     </div>
   </div>
 

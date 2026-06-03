@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Approvals - Admin{% endblock %}
+{% block topbar_title %}Approvals{% endblock %}
+{% block content %}
+
+<div class="pagehead">
+  <h2>Approvals</h2>
+  <p>Review completed inspections before customers see them.</p>
+</div>
+
+<div class="banner pending">
+  <span class="b-ico">!</span>
+  <div class="b-body">
+    <div class="b-title">{{ pending|length }} pending review</div>
+    <div class="b-sub">Customers do not see any inspection until you approve it.</div>
+  </div>
+</div>
+
+<div class="card-title">Awaiting your review</div>
+{% if pending %}
+{% for i in pending %}
+<div class="card">
+  <div class="row">
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon if i.template_slug in TEMPLATES else 'INS' }}</span>
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name if i.template_slug in TEMPLATES else i.template_slug }} &middot; {{ i.inspector_name }}</div>
+      <div class="sub">Completed {{ i.completed_at|relative }}{% if i.def_count %} &middot; {{ i.def_count }} deficienc{{ 'y' if i.def_count == 1 else 'ies' }}{% endif %}</div>
+    </div>
+    <a href="{{ url_for('report', inspection_id=i.id) }}" class="btn ghost small">Review</a>
+  </div>
+  <div class="approve-actions">
+    <form method="post" action="{{ url_for('approve_inspection', inspection_id=i.id) }}">
+      <button type="submit" class="btn success full small">Approve</button>
+    </form>
+    <button type="button" class="btn ghost small"
+            onclick="document.getElementById('reject-{{ i.id }}').style.display='block'; this.style.display='none'">Reject</button>
+  </div>
+  <form method="post" action="{{ url_for('reject_inspection', inspection_id=i.id) }}"
+        id="reject-{{ i.id }}" class="reject-form">
+    <label>Reason (sent back to inspector)</label>
+    <textarea name="rejection_reason" rows="2" required
+              placeholder="What needs to be fixed before this can be approved?"></textarea>
+    <div class="reject-btns">
+      <button type="submit" class="btn danger small">Send back</button>
+      <button type="button" class="btn ghost small"
+              onclick="document.getElementById('reject-{{ i.id }}').style.display='none'">Cancel</button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="card"><div class="empty"><div class="big">OK</div>Nothing waiting for review.</div></div>
+{% endif %}
+
+{% if rejected %}
+<div class="card-title">Recently rejected</div>
+<div class="card">
+  {% for i in rejected %}
+  <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name if i.template_slug in TEMPLATES else i.template_slug }} &middot; {{ i.inspector_name }}</div>
+      {% if i.rejection_reason %}<div class="sub" style="color: var(--fail-ink);">{{ i.rejection_reason }}</div>{% endif %}
+    </div>
+    <span class="pill rejected">Rejected</span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if recently_approved %}
+<div class="card-title">Recently approved</div>
+<div class="card">
+  {% for i in recently_approved %}
+  <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name if i.template_slug in TEMPLATES else i.template_slug }} &middot; by {{ i.inspector_name }}</div>
+      <div class="sub">Approved by {{ i.approver_name }} {{ i.approved_at|relative }}</div>
+    </div>
+    <span class="pill approved">Approved</span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

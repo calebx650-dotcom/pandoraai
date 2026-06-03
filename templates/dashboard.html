@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Home - Spectofire{% endblock %}
-{% block topbar_title %}Hello, {{ current_user.split(' ')[0] }}{% endblock %}
+{% block topbar_title %}Home{% endblock %}
 {% block content %}
 <div class="pagehead">
-  <h2>Today</h2>
-  <p>{{ now.strftime('%A, %b %d, %Y') }}</p>
+  <h2>Hello, {{ current_user.split(' ')[0] }}</h2>
+  <p>{{ now.strftime('%A, %b %d') }}</p>
 </div>
 
 <div class="stats-row">
@@ -14,32 +14,37 @@
   </a>
   <a href="{{ url_for('deficiencies_list') }}" class="stat-card {% if stats.open_deficiencies %}warn{% endif %}">
     <div class="stat-num">{{ stats.open_deficiencies }}</div>
-    <div class="stat-lbl">Open Issues</div>
+    <div class="stat-lbl">Issues</div>
   </a>
   <a href="{{ url_for('reports') }}" class="stat-card">
     <div class="stat-num">{{ stats.open_inspections }}</div>
-    <div class="stat-lbl">In Progress</div>
+    <div class="stat-lbl">Active</div>
   </a>
   {% if current_role == 'admin' %}
-  <a href="{{ url_for('admin_invoices') }}" class="stat-card {% if stats.unpaid_invoices %}warn{% endif %}">
-    <div class="stat-num">{{ stats.unpaid_invoices }}</div>
-    <div class="stat-lbl">Unpaid</div>
+  <a href="{{ url_for('admin_approvals') }}" class="stat-card {% if stats.pending_approvals %}warn{% endif %}">
+    <div class="stat-num">{{ stats.pending_approvals or 0 }}</div>
+    <div class="stat-lbl">To approve</div>
+  </a>
+  {% else %}
+  <a href="{{ url_for('reports') }}" class="stat-card">
+    <div class="stat-num">{{ stats.my_pending or 0 }}</div>
+    <div class="stat-lbl">Pending</div>
   </a>
   {% endif %}
 </div>
 
 {% if hydro_due %}
-<div class="card-title" style="color: var(--fail);">Hydrostatic test - action needed</div>
+<div class="card-title" style="color: var(--fail-ink);">Hydrostatic test - action needed</div>
 <div class="card">
   {% for d in hydro_due[:6] %}
   <a class="row clickable" href="{{ url_for('device_detail', device_id=d.id) }}">
-    <div class="icon">!</div>
+    <span class="icon" style="background: var(--fail-bg); color: var(--fail-ink);">!</span>
     <div class="meta">
       <div class="title">{{ d.barcode or d.serial }} &middot; {{ d.location or '-' }}</div>
-      <div class="sub">{{ d.customer_name }} - {{ d.exp_msg }}</div>
+      <div class="sub">{{ d.customer_name }} &middot; {{ d.exp_msg }}</div>
     </div>
     <span class="pill {% if d.exp_status == 'overdue' %}overdue{% else %}due-soon{% endif %}">
-      {% if d.exp_status == 'overdue' %}Overdue{% else %}Due soon{% endif %}
+      {% if d.exp_status == 'overdue' %}Overdue{% else %}Soon{% endif %}
     </span>
     <span class="chev">&rsaquo;</span>
   </a>
@@ -52,12 +57,47 @@
 <div class="card">
   {% for i in in_progress %}
   <a class="row clickable" href="{{ url_for('inspection', inspection_id=i.id) }}">
-    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon }}</span>
     <div class="meta">
-      <div class="title">{{ i.customer_name }} - {{ i.site_name }}</div>
-      <div class="sub">{{ TEMPLATES[i.template_slug].name }} &middot; started {{ i.started_at|fmtdate }}</div>
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }} &middot; started {{ i.started_at|relative }}</div>
     </div>
-    <span class="pill in_progress">In progress</span>
+    <span class="pill in_progress">Active</span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if my_pending %}
+<div class="card-title">Pending approval</div>
+<div class="card">
+  {% for i in my_pending %}
+  <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon }}</span>
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }} &middot; submitted {{ i.completed_at|relative }}</div>
+    </div>
+    <span class="pill pending">Pending</span>
+    <span class="chev">&rsaquo;</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if my_rejected %}
+<div class="card-title" style="color: var(--fail-ink);">Sent back to you</div>
+<div class="card">
+  {% for i in my_rejected %}
+  <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
+    <span class="icon" style="background: var(--fail-bg); color: var(--fail-ink);">{{ TEMPLATES[i.template_slug].icon }}</span>
+    <div class="meta">
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
+      <div class="sub">{{ TEMPLATES[i.template_slug].name }}</div>
+      {% if i.rejection_reason %}<div class="sub" style="color: var(--fail-ink); white-space: normal;">{{ i.rejection_reason[:90] }}{% if i.rejection_reason|length > 90 %}...{% endif %}</div>{% endif %}
+    </div>
+    <span class="pill rejected">Revise</span>
     <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}
@@ -69,9 +109,10 @@
 <div class="card">
   {% for d in overdue[:6] %}
   <a class="row clickable" href="{{ url_for('site_detail', site_id=d.site_id) }}">
+    <span class="icon" style="background: var(--fail-bg); color: var(--fail-ink);">!</span>
     <div class="meta">
       <div class="title">{{ d.barcode or d.serial }} &middot; {{ d.location or '-' }}</div>
-      <div class="sub">{{ d.customer_name }} - due {{ d.next_due|fmtdate }}</div>
+      <div class="sub">{{ d.customer_name }} &middot; due {{ d.next_due|fmtdate }}</div>
     </div>
     <span class="pill overdue">Overdue</span>
     <span class="chev">&rsaquo;</span>
@@ -87,7 +128,7 @@
   <a class="row clickable" href="{{ url_for('site_detail', site_id=d.site_id) }}">
     <div class="meta">
       <div class="title">{{ d.barcode or d.serial }} &middot; {{ d.location or '-' }}</div>
-      <div class="sub">{{ d.customer_name }} - due {{ d.next_due|fmtdate }}</div>
+      <div class="sub">{{ d.customer_name }} &middot; due {{ d.next_due|fmtdate }}</div>
     </div>
     <span class="pill due-soon">Soon</span>
     <span class="chev">&rsaquo;</span>
@@ -101,13 +142,13 @@
 <div class="card">
   {% for s in scheduled_due %}
   <a class="row clickable" href="{{ url_for('new_inspection') }}?site_id={{ s.site_id }}">
-    <div class="icon">{{ TEMPLATES[s.template_slug].icon if s.template_slug in TEMPLATES else '📋' }}</div>
+    <span class="icon">{{ TEMPLATES[s.template_slug].icon if s.template_slug in TEMPLATES else 'INS' }}</span>
     <div class="meta">
-      <div class="title">{{ s.customer_name }} - {{ s.site_name }}</div>
+      <div class="title">{{ s.customer_name }} &middot; {{ s.site_name }}</div>
       <div class="sub">{{ TEMPLATES[s.template_slug].name if s.template_slug in TEMPLATES else s.template_slug }} &middot; due {{ s.next_due|fmtdate }}</div>
     </div>
     <span class="pill {% if s.next_due < now.date().isoformat() %}overdue{% else %}due-soon{% endif %}">
-      {% if s.next_due < now.date().isoformat() %}Overdue{% else %}Due soon{% endif %}
+      {% if s.next_due < now.date().isoformat() %}Overdue{% else %}Soon{% endif %}
     </span>
     <span class="chev">&rsaquo;</span>
   </a>
@@ -120,12 +161,14 @@
 <div class="card">
   {% for i in recent %}
   <a class="row clickable" href="{{ url_for('report', inspection_id=i.id) }}">
-    <div class="icon">{{ TEMPLATES[i.template_slug].icon }}</div>
+    <span class="icon">{{ TEMPLATES[i.template_slug].icon }}</span>
     <div class="meta">
-      <div class="title">{{ i.customer_name }} - {{ i.site_name }}</div>
+      <div class="title">{{ i.customer_name }} &middot; {{ i.site_name }}</div>
       <div class="sub">{{ TEMPLATES[i.template_slug].name }} &middot; {{ i.completed_at|fmtdate }}</div>
     </div>
-    <span class="pill completed">Done</span>
+    {% if i.approval_status == 'approved' %}<span class="pill approved">Approved</span>
+    {% elif i.approval_status == 'rejected' %}<span class="pill rejected">Rejected</span>
+    {% else %}<span class="pill pending">Pending</span>{% endif %}
     <span class="chev">&rsaquo;</span>
   </a>
   {% endfor %}

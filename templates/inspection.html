@@ -1,25 +1,67 @@
 {% extends "base.html" %}
-{% block title %}{{ template.name }} - IGH fireNspec{% endblock %}
-{% block topbar_title %}{{ template.icon }} {{ template.name }}{% endblock %}
+{% block title %}{{ template.name }} - Spectofire{% endblock %}
+{% block topbar_title %}{{ template.name }}{% endblock %}
 {% block content %}
 
 <div class="pagehead">
-  <h2>{{ insp.customer_name }} - {{ insp.site_name }}</h2>
+  <h2>{{ insp.customer_name }}</h2>
   <p>
-    Started {{ insp.started_at|fmtdate }}{% if insp.gps_lat %} - GPS {{ '%.4f'|format(insp.gps_lat) }}, {{ '%.4f'|format(insp.gps_lng) }}{% endif %}
+    {{ insp.site_name }} &middot; started {{ insp.started_at|relative }}
+    {% if insp.gps_lat %}&middot; GPS captured{% endif %}
   </p>
-  <p id="save-banner" style="font-size: 12px; color: var(--pass); height: 16px; margin-top: 4px;"></p>
+  <p id="save-banner" style="font-size: var(--t-footnote); color: var(--pass-ink); height: 16px; margin-top: 4px;"></p>
 </div>
 
+{% if insp.status == 'completed' %}
+  {% if insp.approval_status == 'approved' %}
+    <div class="banner approved">
+      <span class="b-ico">OK</span>
+      <div class="b-body">
+        <div class="b-title">Approved &middot; visible to customer</div>
+        <div class="b-sub">Approved {{ insp.approved_at|relative if insp.approved_at else 'recently' }}.</div>
+      </div>
+    </div>
+  {% elif insp.approval_status == 'rejected' %}
+    <div class="banner rejected">
+      <span class="b-ico">!</span>
+      <div class="b-body">
+        <div class="b-title">Sent back for revision</div>
+        <div class="b-sub">{{ insp.rejection_reason or 'Please fix the noted items and resubmit.' }}</div>
+      </div>
+    </div>
+    <div style="padding: 0 16px 8px;">
+      <form method="post" action="{{ url_for('resubmit_inspection', inspection_id=insp.id) }}">
+        <button type="submit" class="btn full">Resubmit for approval</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="banner pending">
+      <span class="b-ico">!</span>
+      <div class="b-body">
+        <div class="b-title">Pending admin approval</div>
+        <div class="b-sub">Customer cannot see this report until an admin approves it.</div>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
 <!-- Barcode scan -->
-<div class="card" style="padding: 6px 0;">
+<div class="card-title">Device</div>
+<div class="card">
   <div class="field">
-    <label>Scan or enter device barcode</label>
+    <label>Scan or enter barcode</label>
     <div style="display: flex; gap: 8px;">
       <input type="text" id="barcode-input" placeholder="IGH-FE-..." style="flex: 1;">
-      <button type="button" id="barcode-scan" class="btn ghost" style="padding: 0 14px;">Scan</button>
+      <button type="button"
+              id="barcode-scan"
+              class="btn small"
+              data-scan-trigger
+              data-scan-mode="lookup"
+              style="padding: 0 16px; white-space: nowrap;">
+        Scan
+      </button>
     </div>
-    <div id="barcode-result" class="hint" style="margin-top: 6px;"></div>
+    <div id="barcode-result" class="hint" style="margin-top: 8px;"></div>
   </div>
 </div>
 
@@ -94,12 +136,10 @@
                data-inspection-id="{{ insp.id }}"
                value="{{ answers.get(item.id, {}).get('note') or '' }}">
       </div>
-      {% if cur == 'fail' %}
-      <div style="margin-top: 6px;">
+      <div class="deficiency-btn" style="margin-top: 6px; display: {% if cur == 'fail' %}block{% else %}none{% endif %};">
         <a href="{{ url_for('new_deficiency', inspection_id=insp.id, item_id=item.id, item_label=item.label) }}"
            class="btn secondary" style="font-size: 12px; padding: 6px 12px;">+ Log deficiency</a>
       </div>
-      {% endif %}
     {% elif item.type == 'number' %}
       <input type="number"
              data-autosave-value
