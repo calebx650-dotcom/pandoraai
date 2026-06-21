@@ -2,10 +2,11 @@
 {% block title %}Sign in - Spectofire{% endblock %}
 {% block content %}
 <div class="login-wrap">
-  <div class="brand">
+  <div class="login-brand-panel">
     <img src="/static/logo.svg" class="logo" alt="IGH">
     <h1>Spectofire</h1>
     <p class="tag">IGH Health Fire Safety</p>
+    <div class="brand-rule" aria-hidden="true"></div>
   </div>
   <div class="login-card">
     <h2>Welcome back</h2>
@@ -19,7 +20,7 @@
         <label>Password</label>
         <input type="password" name="password" autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn">Sign in</button>
+      <button type="submit" class="btn full">Sign in</button>
     </form>
     <div class="login-hint">Demo: <strong>inspector</strong> / <strong>igh2026</strong></div>
   </div>

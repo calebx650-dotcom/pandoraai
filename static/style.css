@@ -977,3 +977,251 @@ form { margin: 0; }
 .scanner-status.ok { color: #34C759; }
 .scanner-status.err { color: #FF453A; }
 
+/* ================================================================
+   DESIGN UPGRADE — taste-skill applied 2026-06-20
+   Scope: dark mode, login split-screen, stat card bento treatment
+   Out of scope: inspection forms, data tables, admin panels
+   ================================================================ */
+
+/* ---- DARK MODE TOKEN LAYER ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --label:          #FFFFFF;
+    --label-2:        rgba(235,235,245,.90);
+    --label-3:        rgba(235,235,245,.55);
+    --label-4:        rgba(235,235,245,.25);
+    --bg:             #1C1C1E;
+    --bg-elev:        #2C2C2E;
+    --bg-soft:        #3A3A3C;
+    --separator:      rgba(84,84,88,.55);
+    --separator-hair: rgba(84,84,88,.30);
+    --card:           #2C2C2E;
+    --line:           rgba(84,84,88,.40);
+    --tint-soft:      rgba(232,78,44,.16);
+    --pass-bg:   rgba(52,199,89,.12);   --pass-ink:  #30D158;
+    --fail-bg:   rgba(255,59,48,.12);   --fail-ink:  #FF453A;
+    --warn-bg:   rgba(255,149,0,.12);   --warn-ink:  #FF9F0A;
+    --na-bg:     rgba(142,142,147,.14); --na-ink:    #AEAEB2;
+    --info-bg:   rgba(0,122,255,.12);   --info-ink:  #64B5FF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.32);
+    --shadow:    0 2px 4px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.28);
+  }
+
+  html { color-scheme: dark; }
+
+  .topbar {
+    background: rgba(28,28,30,.90);
+    border-bottom-color: rgba(84,84,88,.28);
+  }
+
+  .tabbar {
+    background: rgba(28,28,30,.92);
+    border-top-color: rgba(84,84,88,.28);
+  }
+
+  .seg { background: rgba(120,120,128,.22); }
+
+  .field input[type=text], .field input[type=email], .field input[type=tel],
+  .field input[type=password], .field input[type=number], .field input[type=date],
+  .field input[type=search], .field select, .field textarea {
+    background: rgba(120,120,128,.18);
+    color: var(--label);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    background: rgba(120,120,128,.28);
+    border-color: var(--tint);
+    box-shadow: 0 0 0 4px rgba(232,78,44,.14);
+  }
+  .item .note input, .item .note textarea {
+    background: rgba(120,120,128,.18);
+    color: var(--label);
+  }
+  .searchbar input { background: rgba(120,120,128,.18); }
+  .searchbar input:focus { background: rgba(120,120,128,.28); }
+
+  .sig-pad { background: rgba(120,120,128,.12); }
+  .sig-pad-wrap { background: var(--card); border-color: rgba(84,84,88,.40); }
+}
+
+/* ---- LOGIN v2: BOTTOM-SHEET ON MOBILE, SPLIT ON DESKTOP ---- */
+
+/* Reset the old centered layout */
+.login-wrap {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+  background:
+    radial-gradient(ellipse at 22% -8%, rgba(232,78,44,.22) 0%, transparent 44%),
+    radial-gradient(ellipse at 108% 108%, rgba(27,67,96,.58) 0%, transparent 48%),
+    linear-gradient(158deg, var(--igh-navy-deep) 0%, var(--igh-navy) 100%);
+}
+
+/* Brand panel - top on mobile */
+.login-brand-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 52px 24px 36px;
+  color: white;
+}
+
+.login-brand-panel .logo {
+  width: 72px; height: 72px;
+  border-radius: 20px;
+  background: white;
+  padding: 10px;
+  box-shadow: 0 10px 32px rgba(0,0,0,.28), 0 2px 8px rgba(0,0,0,.16);
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
+.login-brand-panel h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+  margin: 0 0 6px;
+  color: white;
+  line-height: 1.05;
+}
+
+.login-brand-panel p.tag {
+  color: rgba(255,255,255,.60);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  margin: 0 0 18px;
+}
+
+.brand-rule {
+  width: 36px; height: 3px;
+  border-radius: 2px;
+  background: var(--igh-orange);
+}
+
+/* Login card - bottom sheet on mobile */
+.login-card {
+  background: white;
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px max(28px, env(safe-area-inset-bottom));
+  box-shadow: 0 -16px 60px rgba(0,0,0,.22);
+  width: 100%;
+  max-width: none;
+  color: var(--label);
+  flex-shrink: 0;
+}
+
+.login-card h2 { color: var(--label); }
+
+/* Desktop split-screen */
+@media (min-width: 560px) {
+  .login-wrap {
+    flex-direction: row;
+    justify-content: stretch;
+    align-items: stretch;
+  }
+
+  .login-brand-panel {
+    align-items: flex-start;
+    text-align: left;
+    padding: 60px 44px;
+    justify-content: flex-end;
+    padding-bottom: 72px;
+  }
+
+  .login-brand-panel .logo { margin-bottom: 24px; }
+  .login-brand-panel h1 { font-size: 32px; }
+  .login-brand-panel p.tag { margin-bottom: 16px; }
+  .brand-rule { margin: 0; }
+
+  .login-card {
+    width: 360px;
+    flex-shrink: 0;
+    border-radius: 0;
+    box-shadow: none;
+    border-left: 1px solid rgba(0,0,0,.07);
+    padding: 60px 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .login-card h2 { font-size: 24px; }
+}
+
+/* Entry animation - login surfaces only */
+@media (prefers-reduced-motion: no-preference) {
+  .login-brand-panel {
+    animation: lgnFadeUp .50s cubic-bezier(.16,1,.3,1) both;
+  }
+  .login-card {
+    animation: lgnFadeUp .44s .07s cubic-bezier(.16,1,.3,1) both;
+  }
+  @keyframes lgnFadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Dark mode - login card */
+@media (prefers-color-scheme: dark) {
+  .login-card {
+    background: #1C1C1E;
+    border-left-color: rgba(255,255,255,.08);
+  }
+  .login-card h2 { color: #FFFFFF; }
+  .login-card p.muted { color: rgba(235,235,245,.55); }
+  .login-hint { color: rgba(235,235,245,.38); }
+  .login-card .field label { color: rgba(235,235,245,.72); }
+  .login-card .field input[type=text],
+  .login-card .field input[type=password] {
+    background: rgba(120,120,128,.20);
+    color: #FFFFFF;
+    border-color: transparent;
+  }
+  .login-card .field input:focus {
+    background: rgba(120,120,128,.30);
+    border-color: var(--tint);
+    box-shadow: 0 0 0 4px rgba(232,78,44,.16);
+  }
+}
+
+/* ---- STAT CARDS: 2x2 bento on narrow mobile ---- */
+.stats-row {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 400px) {
+  .stats-row {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Bolder, larger numbers */
+.stat-num {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+.stat-card {
+  padding: 14px 10px;
+}
+
+/* Accent inset stripe on alert states for fast glanceability */
+.stat-card.warn  { box-shadow: inset 3px 0 0 var(--warn), var(--shadow-sm); }
+.stat-card.alert { box-shadow: inset 3px 0 0 var(--fail), var(--shadow-sm); }
+
+/* ---- FAB: crisper shadow ---- */
+.fab {
+  box-shadow:
+    0 4px 14px rgba(232,78,44,.38),
+    0 1px 5px rgba(232,78,44,.22);
+}
+
